@@ -66,3 +66,33 @@ def test_generate_sends_request_and_returns_answer():
         "http://127.0.0.1:11434/api/generate"
     )
     assert answer == "模型正常"
+
+    
+def test_generate_translates_timeout():
+    assert hasattr(
+        ollama_service,
+        "OllamaTimeoutError",
+    ), "尚未定义 OllamaTimeoutError"
+
+    def handle_request(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout(
+            "Ollama 响应超时",
+            request=request,
+        )
+
+    async def run_test() -> None:
+        transport = httpx.MockTransport(handle_request)
+
+        async with httpx.AsyncClient(
+            transport=transport,
+        ) as client:
+            with pytest.raises(
+                ollama_service.OllamaTimeoutError,
+            ):
+                await ollama_service.generate(
+                    model="qwen2.5:1.5b",
+                    prompt="你好",
+                    client=client,
+                )
+
+    asyncio.run(run_test())
