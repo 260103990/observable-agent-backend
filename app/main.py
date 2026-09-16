@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field, field_validator
 from app.services.ollama_service import (
         OllamaTimeoutError, 
+        OllamaConnectionError,
         generate,
 )
 
@@ -38,5 +39,9 @@ async def chat(request: ChatRequest) -> ChatResponse:
             status_code=504,
             detail="Ollama request timed out",
         ) from exc
-
+    except OllamaConnectionError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Ollama service is unavailable",
+        ) from exc
     return ChatResponse(answer=answer)

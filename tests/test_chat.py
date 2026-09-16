@@ -1,6 +1,6 @@
 import pytest
 from fastapi.testclient import TestClient
-from app.services.ollama_service import OllamaTimeoutError
+from app.services.ollama_service import (OllamaTimeoutError, OllamaConnectionError,)
 from app.main import app
 
 
@@ -94,4 +94,30 @@ def test_chat_returns_504_when_ollama_times_out(monkeypatch):
     assert response.status_code == 504
     assert response.json() == {
         "detail": "Ollama request timed out",
+    }
+
+def test_chat_returns_503_when_ollama_is_unavailable(monkeypatch):
+    async def fake_generate(model: str, prompt: str) -> str:
+        raise OllamaConnectionError(
+            "Ollama service is unavailable"
+        )
+
+    monkeypatch.setattr(
+        "app.main.generate",
+        fake_generate,
+    )
+
+    error_client = TestClient(
+        app,
+        raise_server_exceptions=False,
+    )
+
+    response = error_client.post(
+        "/chat",
+        json={"message": "Hello"},
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "detail": "Ollama service is unavailable",
     }

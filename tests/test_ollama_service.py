@@ -96,3 +96,33 @@ def test_generate_translates_timeout():
                 )
 
     asyncio.run(run_test())
+
+
+def test_generate_translates_connection_error():
+    assert hasattr(
+        ollama_service,
+        "OllamaConnectionError",
+    ), "尚未定义 OllamaConnectionError"
+
+    def handle_request(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError(
+            "无法连接 Ollama",
+            request=request,
+        )
+
+    async def run_test() -> None:
+        transport = httpx.MockTransport(handle_request)
+
+        async with httpx.AsyncClient(
+            transport=transport,
+        ) as client:
+            with pytest.raises(
+                ollama_service.OllamaConnectionError,
+            ):
+                await ollama_service.generate(
+                    model="qwen2.5:1.5b",
+                    prompt="你好",
+                    client=client,
+                )
+
+    asyncio.run(run_test())
