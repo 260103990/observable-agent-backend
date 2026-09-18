@@ -1,10 +1,11 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel, Field, field_validator
 from app.services.ollama_service import (
         OllamaTimeoutError, 
         OllamaConnectionError,
         generate,
 )
+from app.config import Settings, get_settings
 
 app = FastAPI(title="Observable Agent Backend")
 
@@ -28,10 +29,13 @@ async def health() -> dict[str, str]:
 
 
 @app.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest) -> ChatResponse:
+async def chat(
+    request: ChatRequest,
+    settings: Settings = Depends(get_settings),
+) -> ChatResponse:
     try:
         answer = await generate(
-            model="qwen2.5:1.5b",
+            model=settings.ollama_model,
             prompt=request.message,
         )
     except OllamaTimeoutError as exc:

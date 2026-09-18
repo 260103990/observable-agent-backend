@@ -55,3 +55,21 @@ def test_settings_reject_invalid_timeout(monkeypatch):
 
     with pytest.raises(ValidationError):
         Settings(_env_file=None)
+
+def test_get_settings_reuses_same_instance():
+    from app import config
+
+    assert hasattr(
+        config,
+        "get_settings",
+    ), "get_settings() 尚未实现"
+
+    config.get_settings.cache_clear()
+
+    try:
+        first_settings = config.get_settings()
+        second_settings = config.get_settings()
+
+        assert first_settings is second_settings
+    finally:
+        config.get_settings.cache_clear()

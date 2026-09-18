@@ -2,6 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 from app.services.ollama_service import (OllamaTimeoutError, OllamaConnectionError,)
 from app.main import app
+from app.config import Settings, get_settings
 
 
 client = TestClient(app)
@@ -121,3 +122,38 @@ def test_chat_returns_503_when_ollama_is_unavailable(monkeypatch):
     assert response.json() == {
         "detail": "Ollama service is unavailable",
     }
+
+def test_chat_uses_configured_model(monkeypatch):
+    received_models = []
+
+    async def fake_generate(model: str, prompt: str) -> str:
+        received_models.append(model)
+        return "模型正常"
+
+    monkeypatch.setattr(
+        "app.main.generate",
+        fake_generate,
+    )
+
+    test_settings = Settings(
+        ollama_model="qwen3:4b",
+        _env_file=None,
+    )
+
+    app.dependency_overrides[get_settings] = (
+        lambda: test_settings
+    )
+
+    try:
+        response = client.post(
+            "/chat",
+            json={"message": "Hello"},
+        )
+    finally:
+        app.dependency_overrides.pop(
+            get_settings,
+            None,
+        )
+
+    assert response.status_code == 200
+    assert received_models == ["qwen3:4b"]
