@@ -1,8 +1,8 @@
 # Observable Agent Backend
 
-这是 `mdx maas` 下的独立后端学习项目。项目将现有的 Ollama 流量实验逐步扩展为一个具有 RAG、Tool Calling、评估与可观测性的 LLM Agent Backend。
+这是位于 `agent-study` 下的 Python Backend + AI Agent 学习项目。项目从一个 FastAPI + Ollama 聊天接口开始，逐步扩展为具有持久化、Tool Calling、RAG、评估与可观测性的 LLM Agent Backend。
 
-当前版本使用 FastAPI 提供 HTTP API，并通过异步 HTTP 请求调用本地 Ollama 中的 Qwen2.5 1.5B 模型。
+当前版本使用 FastAPI 提供 HTTP API，通过异步 HTTP 请求调用 Ollama，并使用类型化配置管理模型名称、服务地址和请求超时时间。
 
 ## 当前功能
 
@@ -12,7 +12,12 @@
 - 使用 HTTPX 异步调用 Ollama API。
 - 使用 pytest 验证路由、请求数据和 Ollama service。
 - 使用假 HTTP 响应测试 LLM service，不要求测试时启动真实模型。
-
+- 使用 `pydantic-settings` 管理模型名称、Ollama URL 和超时时间。
+- 支持通过环境变量或 `.env` 修改配置。
+- 将 Ollama 连接失败转换为 HTTP `503`。
+- 将 Ollama 请求超时转换为 HTTP `504`。
+- 将 Ollama 错误响应转换为 HTTP `502`。
+- 
 ## Architecture
 
 ```text
@@ -42,14 +47,17 @@ observable-agent-backend/
 ├── app/
 │   ├── __init__.py
 │   ├── main.py
+│   ├── config.py
 │   └── services/
 │       ├── __init__.py
 │       └── ollama_service.py
 ├── tests/
 │   ├── __init__.py
 │   ├── test_chat.py
+│   ├── test_config.py
 │   ├── test_health.py
 │   └── test_ollama_service.py
+├── .env.example
 ├── .gitignore
 ├── requirements.txt
 └── README.md
@@ -76,10 +84,18 @@ ollama pull qwen2.5:1.5b
 ## 安装
 
 ```powershell
-cd "C:\Users\26010\Desktop\mdx maas\observable-agent-backend"
+cd "C:\Users\26010\Desktop\agent-study\observable-agent-backend"
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
+Copy-Item .env.example .env
+```
+## 配置
+
+复制配置模板：
+
+```powershell
+Copy-Item .env.example .env
 ```
 
 ## 运行测试
@@ -175,15 +191,17 @@ Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/chat" -ContentType "a
 - `404 Not Found`：请求的路径不存在。
 - `405 Method Not Allowed`：路径存在，但不支持该 HTTP 方法。
 - `422 Unprocessable Content`：请求 JSON 不符合 Pydantic 模型。
-- `500 Internal Server Error`：后端或外部模型调用发生未处理的异常。
+- `502 Bad Gateway`：Ollama 返回了错误状态。
+- `503 Service Unavailable`：当前无法连接 Ollama。
+- `504 Gateway Timeout`：等待 Ollama 响应超时。
+- `500 Internal Server Error`：发生了尚未处理的服务器异常。
 
 ## 当前限制
 
-- 模型名称目前固定为 `qwen2.5:1.5b`。
 - `/chat` 尚未保存聊天历史。
-- Ollama 连接失败和超时尚未转换为清晰的 API 错误响应。
+- 当前只支持 Ollama，不支持其他模型提供商。
 - 尚未接入 PostgreSQL、RAG、Tool Calling 和评估系统。
-- 当前模型较小，指令遵循和回答质量可能不稳定。
+- 当前没有重试机制、请求日志和性能指标。
 
 ## 后续计划
 
