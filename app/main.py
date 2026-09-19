@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field, field_validator
 from app.services.ollama_service import (
         OllamaTimeoutError, 
         OllamaConnectionError,
+        OllamaResponseError,
         generate,
 )
 from app.config import Settings, get_settings
@@ -37,6 +38,8 @@ async def chat(
         answer = await generate(
             model=settings.ollama_model,
             prompt=request.message,
+            generate_url=settings.ollama_generate_url,
+            timeout_seconds=settings.ollama_timeout_seconds,
         )
     except OllamaTimeoutError as exc:
         raise HTTPException(
@@ -47,5 +50,10 @@ async def chat(
         raise HTTPException(
             status_code=503,
             detail="Ollama service is unavailable",
+        ) from exc
+    except OllamaResponseError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Ollama returned an error response",
         ) from exc
     return ChatResponse(answer=answer)

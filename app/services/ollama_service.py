@@ -5,7 +5,6 @@ def build_payload(model: str, prompt: str) -> dict:
         "prompt": prompt,
         "stream": False,
     }
-OLLAMA_GENERATE_URL = "http://127.0.0.1:11434/api/generate"
 
 
 class OllamaTimeoutError(Exception):
@@ -15,19 +14,26 @@ class OllamaTimeoutError(Exception):
 class OllamaConnectionError(Exception):
     """无法连接 Ollama 服务。"""
 
+
+class OllamaResponseError(Exception):
+    """Ollama 返回了错误状态。"""
+
+
 async def generate(
     model: str,
     prompt: str,
+    generate_url: str,
+    timeout_seconds: float,
     client: httpx.AsyncClient | None = None,
 ) -> str:
     owns_client = client is None
 
     if client is None:
-        client = httpx.AsyncClient(timeout=120.0)
+        client = httpx.AsyncClient(timeout=timeout_seconds)
 
     try:
         response = await client.post(
-            OLLAMA_GENERATE_URL,
+            generate_url,
             json=build_payload(model=model, prompt=prompt),
         )
         response.raise_for_status()
@@ -41,6 +47,10 @@ async def generate(
     except httpx.ConnectError as exc:
         raise OllamaConnectionError(
             "Ollama service is unavailable"
+        ) from exc
+    except httpx.HTTPStatusError as exc:
+        raise OllamaResponseError(
+            "Ollama returned an error response"
         ) from exc
     finally:
         if owns_client:
