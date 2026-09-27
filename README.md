@@ -2,7 +2,7 @@
 
 这是位于 `agent-study` 下的 Python Backend + AI Agent 学习项目。项目从一个 FastAPI + Ollama 聊天接口开始，逐步扩展为具有持久化、Tool Calling、RAG、评估与可观测性的 LLM Agent Backend。
 
-当前版本使用 FastAPI 提供 HTTP API，通过异步 HTTP 请求调用 Ollama，并使用类型化配置管理模型名称、服务地址和请求超时时间。
+当前版本使用 FastAPI 提供 HTTP API，通过异步 HTTP 请求调用 Ollama，使用类型化配置管理模型名称、服务地址和请求超时时间，并提供请求级可观测性。
 
 ## 当前功能
 
@@ -17,13 +17,19 @@
 - 将 Ollama 连接失败转换为 HTTP `503`。
 - 将 Ollama 请求超时转换为 HTTP `504`。
 - 将 Ollama 错误响应转换为 HTTP `502`。
-- 
+- 为每个请求生成或保留 `X-Request-ID`。
+- 通过 `X-Process-Time-Ms` 返回服务端处理耗时。
+- 使用结构化日志记录请求方法、路径、状态码、耗时和异常类型。
+- 为未处理异常记录 traceback，并继续交由 Starlette 返回 HTTP `500`。
 ## Architecture
 
 ```text
 Client
   |
   | HTTP request
+  v
+Request Context Middleware
+  | request_id, timing, structured logs
   v
 FastAPI
   |
@@ -56,7 +62,8 @@ observable-agent-backend/
 │   ├── test_chat.py
 │   ├── test_config.py
 │   ├── test_health.py
-│   └── test_ollama_service.py
+│   ├── test_ollama_service.py
+│   └── test_request_context.py
 ├── .env.example
 ├── .gitignore
 ├── requirements.txt
@@ -110,6 +117,10 @@ python -m pytest -v
 - `/chat` 是否调用 LLM service 并返回模型答案。
 - Ollama 请求是否使用正确的模型、prompt、URL 和 POST 方法。
 - Ollama 返回的 JSON 是否被正确解析。
+- 请求 ID 是否自动生成或保留客户端传入值。
+- 响应是否包含服务端处理耗时。
+- 正常请求和未处理异常是否生成正确的结构化日志。
+- 请求日志是否只输出一次，并包含完整的终端格式。
 
 自动测试使用假的 LLM 和 HTTP 响应，因此不依赖真实 Ollama，也不会实际加载模型。
 
@@ -185,6 +196,25 @@ $body = @{message="请用一句中文介绍你自己"} | ConvertTo-Json -Compres
 Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/chat" -ContentType "application/json; charset=utf-8" -Body ([System.Text.Encoding]::UTF8.GetBytes($body)) -TimeoutSec 30
 ```
 
+## 请求可观测性
+
+每个 HTTP 响应都包含：
+
+```http
+X-Request-ID: 550e8400-e29b-41d4-a716-446655440000
+X-Process-Time-Ms: 3.14
+```
+
+客户端可以主动传入 `X-Request-ID`；如果没有传入，服务端会自动生成 UUID。相同的请求 ID 也会写入服务端日志，用于关联客户端响应与后端执行过程。
+
+正常请求日志示例：
+
+```text
+INFO app.request request_completed request_id=live-log-001 method=GET path=/health status_code=200 process_time_ms=3.14 exception_type=-
+```
+
+未处理异常使用 `request_failed` 事件和 `ERROR` 级别，并附带异常类型与 traceback。
+
 ## HTTP 状态码
 
 - `200 OK`：请求处理成功。
@@ -201,12 +231,12 @@ Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/chat" -ContentType "a
 - `/chat` 尚未保存聊天历史。
 - 当前只支持 Ollama，不支持其他模型提供商。
 - 尚未接入 PostgreSQL、RAG、Tool Calling 和评估系统。
-- 当前没有重试机制、请求日志和性能指标。
+- 当前没有重试机制、token 用量统计和外部指标系统。
 
 ## 后续计划
 
-1. 增加 Ollama 超时和连接错误处理。
-2. 记录 `request_id`、token 数量和请求延迟。
+1. 使用 `APIRouter` 拆分路由、Schema 和应用组装代码。
+2. 解析并记录 Ollama token 用量与模型执行耗时，并增加有限重试。
 3. 使用 PostgreSQL 保存 conversation 和 message。
 4. 使用 PostgreSQL 与 pgvector 实现 RAG。
 5. 增加结构化 Tool Calling 和 Agent Loop。
