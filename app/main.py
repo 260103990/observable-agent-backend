@@ -5,6 +5,7 @@ from uuid import uuid4
 from fastapi import Depends, FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
 
+from app.api.routes.health import router as health_router
 from app.config import Settings, get_settings
 from app.services.ollama_service import (
     OllamaConnectionError,
@@ -42,6 +43,7 @@ if not request_logger.handlers:
 
 
 app = FastAPI(title="Observable Agent Backend")
+app.include_router(health_router)
 
 
 @app.middleware("http")
@@ -113,11 +115,6 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     answer: str
-
-
-@app.get("/health")
-async def health() -> dict[str, str]:
-    return {"status": "ok"}
 
 
 @app.post("/chat", response_model=ChatResponse)

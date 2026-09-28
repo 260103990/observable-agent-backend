@@ -15,3 +15,14 @@ def test_health_returns_ok():
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+def test_health_route_has_health_tag():
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    schema = TestClient(app).get("/openapi.json").json()
+
+    health_operation = schema["paths"]["/health"]["get"]
+
+    assert health_operation.get("tags") == ["health"]
