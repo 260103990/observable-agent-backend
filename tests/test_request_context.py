@@ -92,7 +92,7 @@ def test_unhandled_exception_is_logged(
         raise RuntimeError("unexpected failure")
 
     monkeypatch.setattr(
-        "app.main.generate",
+        "app.api.routes.chat.generate",
         fake_generate,
     )
 

@@ -20,9 +20,8 @@ def test_chat_returns_llm_answer(monkeypatch):
         return "模型正常"
 
     monkeypatch.setattr(
-        "app.main.generate",
+        "app.api.routes.chat.generate",
         fake_generate,
-        raising=False,
     )
 
     response = client.post(
@@ -43,7 +42,7 @@ def test_chat_rejects_blank_message(monkeypatch, message):
         return "不应该调用模型"
 
     monkeypatch.setattr(
-        "app.main.generate",
+        "app.api.routes.chat.generate",
         fake_generate,
     )
 
@@ -62,7 +61,7 @@ def test_chat_strips_surrounding_whitespace(monkeypatch):
         received_prompts.append(prompt)
         return "模型正常"
 
-    monkeypatch.setattr("app.main.generate", fake_generate)
+    monkeypatch.setattr("app.api.routes.chat.generate", fake_generate)
 
     response = client.post(
         "/chat",
@@ -80,7 +79,7 @@ def test_chat_returns_504_when_ollama_times_out(monkeypatch):
         )
 
     monkeypatch.setattr(
-        "app.main.generate",
+        "app.api.routes.chat.generate",
         fake_generate,
     )
 
@@ -106,7 +105,7 @@ def test_chat_returns_503_when_ollama_is_unavailable(monkeypatch):
         )
 
     monkeypatch.setattr(
-        "app.main.generate",
+        "app.api.routes.chat.generate",
         fake_generate,
     )
 
@@ -133,7 +132,7 @@ def test_chat_uses_configured_model(monkeypatch):
         return "模型正常"
 
     monkeypatch.setattr(
-        "app.main.generate",
+        "app.api.routes.chat.generate",
         fake_generate,
     )
 
@@ -174,7 +173,7 @@ def test_chat_passes_ollama_settings_to_generate(monkeypatch):
         return "模型正常"
 
     monkeypatch.setattr(
-        "app.main.generate",
+        "app.api.routes.chat.generate",
         fake_generate,
     )
 
@@ -223,7 +222,7 @@ def test_chat_returns_502_when_ollama_returns_error(
         )
 
     monkeypatch.setattr(
-        "app.main.generate",
+        "app.api.routes.chat.generate",
         fake_generate,
     )
 
@@ -241,3 +240,11 @@ def test_chat_returns_502_when_ollama_returns_error(
     assert response.json() == {
         "detail": "Ollama returned an error response",
     }
+
+
+def test_chat_route_has_chat_tag():
+    schema = client.get("/openapi.json").json()
+
+    chat_operation = schema["paths"]["/chat"]["post"]
+
+    assert chat_operation.get("tags") == ["chat"]

@@ -2,17 +2,10 @@ import logging
 from time import perf_counter
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, HTTPException, Request
-from pydantic import BaseModel, Field, field_validator
+from fastapi import FastAPI, Request
 
+from app.api.routes.chat import router as chat_router
 from app.api.routes.health import router as health_router
-from app.config import Settings, get_settings
-from app.services.ollama_service import (
-    OllamaConnectionError,
-    OllamaResponseError,
-    OllamaTimeoutError,
-    generate,
-)
 
 
 request_logger = logging.getLogger("app.request")
@@ -44,6 +37,7 @@ if not request_logger.handlers:
 
 app = FastAPI(title="Observable Agent Backend")
 app.include_router(health_router)
+app.include_router(chat_router)
 
 
 @app.middleware("http")
@@ -100,48 +94,3 @@ async def add_request_context(
     )
 
     return response
-
-
-class ChatRequest(BaseModel):
-    message: str = Field(min_length=1)
-
-    @field_validator("message", mode="before")
-    @classmethod
-    def strip_message(cls, value):
-        if isinstance(value, str):
-            return value.strip()
-        return value
-
-
-class ChatResponse(BaseModel):
-    answer: str
-
-
-@app.post("/chat", response_model=ChatResponse)
-async def chat(
-    request: ChatRequest,
-    settings: Settings = Depends(get_settings),
-) -> ChatResponse:
-    try:
-        answer = await generate(
-            model=settings.ollama_model,
-            prompt=request.message,
-            generate_url=settings.ollama_generate_url,
-            timeout_seconds=settings.ollama_timeout_seconds,
-        )
-    except OllamaTimeoutError as exc:
-        raise HTTPException(
-            status_code=504,
-            detail="Ollama request timed out",
-        ) from exc
-    except OllamaConnectionError as exc:
-        raise HTTPException(
-            status_code=503,
-            detail="Ollama service is unavailable",
-        ) from exc
-    except OllamaResponseError as exc:
-        raise HTTPException(
-            status_code=502,
-            detail="Ollama returned an error response",
-        ) from exc
-    return ChatResponse(answer=answer)
