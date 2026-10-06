@@ -1,6 +1,7 @@
 from importlib.util import find_spec
-
+from app.tools.calculator import ADD_NUMBERS_TOOL
 import pytest
+import json
 
 
 def test_build_payload_uses_non_streaming_mode():
@@ -259,3 +260,92 @@ def test_generate_translates_http_status_error():
                 )
 
     asyncio.run(run_test())
+
+
+def test_build_chat_payload_wraps_tool_schemas():
+    payload = ollama_service.build_chat_payload(
+        model="qwen2.5:1.5b",
+        prompt="请计算 17 + 25",
+        tool_schemas=[
+            ADD_NUMBERS_TOOL.to_schema(),
+        ],
+    )
+
+    assert payload == {
+        "model": "qwen2.5:1.5b",
+        "messages": [
+            {
+                "role": "user",
+                "content": "请计算 17 + 25",
+            },
+        ],
+        "tools": [
+            {
+                "type": "function",
+                "function": (
+                    ADD_NUMBERS_TOOL.to_schema()
+                ),
+            },
+        ],
+        "stream": False,
+    }
+
+
+def test_chat_with_tools_sends_request_and_returns_data():
+    captured_request = {}
+
+    def handle_request(
+        request: httpx.Request,
+    ) -> httpx.Response:
+        captured_request["method"] = request.method
+        captured_request["url"] = str(request.url)
+        captured_request["payload"] = json.loads(
+            request.content
+        )
+
+        return httpx.Response(
+            status_code=200,
+            json={
+                "message": {
+                    "role": "assistant",
+                    "tool_calls": [],
+                },
+                "done": True,
+            },
+        )
+
+    async def run_test() -> dict:
+        transport = httpx.MockTransport(handle_request)
+
+        async with httpx.AsyncClient(
+            transport=transport,
+        ) as client:
+            return await ollama_service.chat_with_tools(
+                model="qwen2.5:1.5b",
+                prompt="请计算 17 + 25",
+                tool_schemas=[
+                    ADD_NUMBERS_TOOL.to_schema(),
+                ],
+                chat_url=(
+                    "http://configured:11434/api/chat"
+                ),
+                timeout_seconds=30.0,
+                client=client,
+            )
+
+    data = asyncio.run(run_test())
+
+    assert captured_request["method"] == "POST"
+    assert captured_request["url"] == (
+        "http://configured:11434/api/chat"
+    )
+    assert captured_request["payload"] == (
+        ollama_service.build_chat_payload(
+            model="qwen2.5:1.5b",
+            prompt="请计算 17 + 25",
+            tool_schemas=[
+                ADD_NUMBERS_TOOL.to_schema(),
+            ],
+        )
+    )
+    assert data["done"] is True
