@@ -16,6 +16,9 @@ def test_settings_use_defaults():
         settings.ollama_generate_url
         == "http://127.0.0.1:11434/api/generate"
     )
+    assert settings.ollama_chat_url == (
+        "http://127.0.0.1:11434/api/chat"
+    )
     assert settings.ollama_timeout_seconds == 120.0
 
 def test_settings_read_environment_variables(monkeypatch):
@@ -31,6 +34,10 @@ def test_settings_read_environment_variables(monkeypatch):
         "OLLAMA_TIMEOUT_SECONDS",
         "30",
     )
+    monkeypatch.setenv(
+        "OLLAMA_CHAT_URL",
+        "http://ollama:11434/api/chat",
+    )
 
     from app.config import Settings
 
@@ -42,6 +49,9 @@ def test_settings_read_environment_variables(monkeypatch):
         == "http://ollama:11434/api/generate"
     )
     assert settings.ollama_timeout_seconds == 30.0
+    assert settings.ollama_chat_url == (
+        "http://ollama:11434/api/chat"
+    )
 
 def test_settings_reject_invalid_timeout(monkeypatch):
     monkeypatch.setenv(

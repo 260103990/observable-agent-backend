@@ -7,6 +7,9 @@ class Settings(BaseSettings):
     ollama_generate_url: str = (
         "http://127.0.0.1:11434/api/generate"
     )
+    ollama_chat_url: str = (
+        "http://127.0.0.1:11434/api/chat"
+    )
     ollama_timeout_seconds: float = 120.0
 
     model_config = SettingsConfigDict(
