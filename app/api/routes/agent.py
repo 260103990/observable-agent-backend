@@ -20,7 +20,7 @@ from app.tools.registry import (
 )
 
 
-router = APIRouter()
+router = APIRouter(tags=["agent"])
 
 
 @router.post(

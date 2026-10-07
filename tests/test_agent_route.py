@@ -258,3 +258,16 @@ def test_agent_run_maps_known_errors(
     assert response.json() == {
         "detail": detail,
     }
+
+
+def test_agent_route_has_agent_tag():
+    client = TestClient(app)
+
+    schema = client.get("/openapi.json").json()
+
+    tags = schema["paths"]["/agent/run"]["post"].get(
+        "tags",
+        [],
+    )
+
+    assert "agent" in tags
