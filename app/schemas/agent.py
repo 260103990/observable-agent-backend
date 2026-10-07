@@ -16,3 +16,7 @@ class AgentRunRequest(BaseModel):
             return value.strip()
 
         return value
+
+
+class AgentRunResponse(BaseModel):
+    result: int
