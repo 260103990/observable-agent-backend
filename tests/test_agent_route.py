@@ -7,6 +7,19 @@ from pydantic import ValidationError
 from app.api.dependencies import get_agent_runner
 from app.main import app
 
+from app.agent.ollama_decision_maker import (
+    OllamaDecisionError,
+)
+from app.services.ollama_service import (
+    OllamaConnectionError,
+    OllamaResponseError,
+    OllamaTimeoutError,
+)
+from app.tools.registry import (
+    ToolArgumentsError,
+    ToolNotFoundError,
+)
+
 
 @pytest.fixture(autouse=True)
 def clear_dependency_overrides():
@@ -181,3 +194,67 @@ def test_agent_run_rejects_blank_prompt(prompt):
 
     assert response.status_code == 422
     assert runner.prompts == []
+
+
+@pytest.mark.parametrize(
+    ("error", "status_code", "detail"),
+    [
+        (
+            OllamaTimeoutError("timeout"),
+            504,
+            "Ollama request timed out",
+        ),
+        (
+            OllamaConnectionError("unavailable"),
+            503,
+            "Ollama service is unavailable",
+        ),
+        (
+            OllamaResponseError("bad response"),
+            502,
+            "Ollama returned an error response",
+        ),
+        (
+            OllamaDecisionError("invalid decision"),
+            502,
+            "Ollama returned an invalid tool decision",
+        ),
+        (
+            ToolNotFoundError("unknown tool"),
+            502,
+            "Ollama selected an unknown tool",
+        ),
+        (
+            ToolArgumentsError("invalid arguments"),
+            502,
+            "Ollama returned invalid tool arguments",
+        ),
+    ],
+)
+def test_agent_run_maps_known_errors(
+    error,
+    status_code,
+    detail,
+):
+    runner = FakeRunner(error=error)
+
+    app.dependency_overrides[get_agent_runner] = (
+        lambda: runner
+    )
+
+    client = TestClient(
+        app,
+        raise_server_exceptions=False,
+    )
+
+    response = client.post(
+        "/agent/run",
+        json={
+            "prompt": "请计算 17 + 25",
+        },
+    )
+
+    assert response.status_code == status_code
+    assert response.json() == {
+        "detail": detail,
+    }
