@@ -6,6 +6,7 @@ from fastapi import FastAPI, Request
 
 from app.api.routes.chat import router as chat_router
 from app.api.routes.health import router as health_router
+from app.api.routes.agent import router as agent_router
 
 
 request_logger = logging.getLogger("app.request")
@@ -38,6 +39,7 @@ if not request_logger.handlers:
 app = FastAPI(title="Observable Agent Backend")
 app.include_router(health_router)
 app.include_router(chat_router)
+app.include_router(agent_router)
 
 
 @app.middleware("http")
