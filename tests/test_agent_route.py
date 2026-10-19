@@ -1,4 +1,5 @@
 import asyncio
+from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
@@ -38,9 +39,19 @@ class FakeRunner:
         self.result = result
         self.error = error
         self.prompts: list[str] = []
+        self.request_ids: list[str | None] = []
+        self.trace_ids: list[str | None] = []
 
-    async def run(self, prompt: str) -> int:
+    async def run(
+        self,
+        prompt: str,
+        *,
+        request_id: str | None = None,
+        trace_id: str | None = None,
+    ) -> int:
         self.prompts.append(prompt)
+        self.request_ids.append(request_id)
+        self.trace_ids.append(trace_id)
 
         if self.error is not None:
             raise self.error
@@ -109,11 +120,19 @@ def test_get_agent_runner_uses_settings_and_registered_tool(
         ollama_timeout_seconds=12.5,
     )
 
-    runner = dependencies.get_agent_runner(settings)
+    runner = dependencies.get_agent_runner(
+        settings=settings,
+        trace_store=dependencies.get_trace_store(),
+    )
 
     result = asyncio.run(
-        runner.run("请计算 17 + 25")
+        runner.run(
+            "请计算 17 + 25",
+            request_id="request-settings-test",
+            trace_id="trace-settings-test",
+        )
     )
+
 
     assert result == 42
     assert captured["model"] == "test-model"
@@ -151,6 +170,93 @@ def test_agent_run_returns_tool_result():
     assert runner.prompts == [
         "请计算 17 + 25",
     ]
+
+
+def test_agent_run_passes_request_id_to_runner():
+    runner = FakeRunner(result=42)
+
+    app.dependency_overrides[get_agent_runner] = (
+        lambda: runner
+    )
+
+    client = TestClient(app)
+
+    response = client.post(
+        "/agent/run",
+        headers={
+            "X-Request-ID": "agent-request-123",
+        },
+        json={
+            "prompt": "请计算 17 + 25",
+        },
+    )
+
+    assert response.status_code == 200
+    assert runner.request_ids == [
+        "agent-request-123",
+    ]
+
+
+def test_agent_run_generates_new_trace_id_for_each_request():
+    runner = FakeRunner(result=42)
+
+    app.dependency_overrides[get_agent_runner] = (
+        lambda: runner
+    )
+
+    client = TestClient(app)
+
+    first_response = client.post(
+        "/agent/run",
+        json={
+            "prompt": "第一次",
+        },
+    )
+    second_response = client.post(
+        "/agent/run",
+        json={
+            "prompt": "第二次",
+        },
+    )
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 200
+
+    first_trace_id, second_trace_id = runner.trace_ids
+
+    assert first_trace_id is not None
+    assert second_trace_id is not None
+
+    UUID(first_trace_id)
+    UUID(second_trace_id)
+
+    assert first_trace_id != second_trace_id
+
+
+def test_agent_run_returns_trace_id_header():
+    runner = FakeRunner(result=42)
+
+    app.dependency_overrides[get_agent_runner] = (
+        lambda: runner
+    )
+
+    client = TestClient(app)
+
+    response = client.post(
+        "/agent/run",
+        json={
+            "prompt": "请计算 17 + 25",
+        },
+    )
+
+    assert response.status_code == 200
+
+    trace_id = runner.trace_ids[0]
+
+    assert trace_id is not None
+    assert response.headers.get(
+        "X-Trace-ID"
+    ) == trace_id
 
 
 def test_agent_run_strips_prompt_before_runner():

@@ -1,9 +1,14 @@
 import logging
 from io import StringIO
 
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
-from app.main import app, request_logger
+from app.main import (
+    add_request_context,
+    app,
+    request_logger,
+)
 
 client = TestClient(app)
 
@@ -28,6 +33,35 @@ def test_response_preserves_client_request_id():
         response.headers["x-request-id"]
         == "client-request-123"
     )
+
+
+def test_request_id_is_available_in_request_state():
+    test_app = FastAPI()
+    test_app.middleware("http")(add_request_context)
+
+    @test_app.get("/request-id")
+    async def read_request_id(
+        request: Request,
+    ):
+        return {
+            "request_id": getattr(
+                request.state,
+                "request_id",
+                None,
+            ),
+        }
+
+    response = TestClient(test_app).get(
+        "/request-id",
+        headers={
+            "X-Request-ID": "state-test-123",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "request_id": "state-test-123",
+    }
 
 
 def test_response_includes_process_time():

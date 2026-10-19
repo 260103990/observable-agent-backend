@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+from uuid import uuid4
+
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.agent.ollama_decision_maker import (
     OllamaDecisionError,
@@ -28,11 +30,18 @@ router = APIRouter(tags=["agent"])
     response_model=AgentRunResponse,
 )
 async def run_agent(
-    request: AgentRunRequest,
+    body: AgentRunRequest,
+    request: Request,
     runner: AgentRunner = Depends(get_agent_runner),
 ) -> AgentRunResponse:
+    request.state.trace_id = str(uuid4())
+
     try:
-        result = await runner.run(request.prompt)
+        result = await runner.run(
+            body.prompt,
+            request_id=request.state.request_id,
+            trace_id=request.state.trace_id,
+        )
     except OllamaTimeoutError as error:
         raise HTTPException(
             status_code=504,
