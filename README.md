@@ -2,10 +2,10 @@
 
 一个用于学习 Python 后端与 AI Agent 工程的 FastAPI 项目。
 
-当前版本同时提供普通聊天接口、可测试的单步 Tool Calling Agent，以及请求级日志、请求 ID、耗时统计、配置管理和错误转换。
+当前版本提供普通聊天接口、可测试的单步 Tool Calling Agent，以及请求级日志、Agent Trace、Trace 查询、配置管理和错误转换。
 
 > 当前项目仍处于学习和迭代阶段，不是生产级 Agent 平台。
-> “Observable”目前主要体现在 HTTP 请求级可观测性；模型决策和工具执行的 Agent 级 Trace 尚未实现。
+> 已支持模型决策和工具执行的 Trace 与 Span，执行记录保存在当前进程的内存中。
 
 ## 当前功能
 
@@ -14,8 +14,9 @@
 - `GET /health`：检查后端服务是否正常。
 - `POST /chat`：调用 Ollama `/api/generate` 生成文本回答。
 - `POST /agent/run`：让 Ollama 选择一个已注册工具并执行。
+- `GET /traces/{trace_id}`：按 Trace ID 查询执行记录；记录不存在时返回 `404`。
 
-三个接口分别在 OpenAPI 文档中归类为 `health`、`chat` 和 `agent`。
+四个接口分别在 OpenAPI 文档中归类为 `health`、`chat`、`agent` 和 `traces`。
 
 ### 单步 Agent
 
@@ -71,6 +72,16 @@ Tool Registry 校验并执行
 - 使用 `X-Process-Time-Ms` 返回服务端处理耗时；
 - 使用结构化日志记录请求方法、路径、状态码、耗时和异常类型；
 - 未处理异常会记录 traceback，并继续交由 Starlette 返回 HTTP `500`。
+
+### Agent 级可观测性
+
+- 使用共享 `TraceStore` 保存和查询执行记录。
+- 一次成功执行包含 `agent.run`、`model.decision` 和 `tool.execute` 三个 Span。
+- 记录执行状态、总耗时、各阶段耗时和失败阶段的异常类型。
+- 使用 `request_id` 将 Agent Trace 与 HTTP 请求关联。
+- 成功执行后，通过响应头 `X-Trace-ID` 返回本次执行的 Trace ID。
+- 使用 `GET /traces/{trace_id}` 查询完整记录，包括嵌套的 Span 数据。
+- 记录不存在时返回 `404`，响应正文为 `{"detail": "Trace not found"}`。
 
 ## 架构
 
@@ -374,7 +385,7 @@ INFO app.request request_completed request_id=live-log-001 method=POST path=/age
 
 未处理异常使用 `request_failed` 事件和 `ERROR` 级别，并记录异常类型与 traceback。
 
-当前日志可以回答“哪个 HTTP 请求失败、状态码是什么、用了多久”，但暂时不能展示 Agent 内部的模型决策和工具执行步骤。
+HTTP 请求日志用于查看请求状态和处理耗时；Agent 内部的模型决策与工具执行步骤可以通过 Trace 查询接口查看。
 
 ## 当前限制
 
@@ -385,18 +396,16 @@ INFO app.request request_completed request_id=live-log-001 method=POST path=/age
 - 没有对话历史和长期记忆；
 - 没有数据库、RAG 或向量检索；
 - 只支持 Ollama，不支持其他模型提供商；
-- 没有 Agent 级 Trace、Span、Token 用量和工具耗时记录；
+- Trace 仅保存在当前进程内存中，重启后丢失，多个进程之间不共享；
+- 尚未记录模型 Token 用量；
 - 没有重试、限流、认证、权限控制和生产部署配置；
 - 当前响应模型将 Agent 结果限定为整数，尚未支持通用工具结果。
 
 ## 后续计划
 
-1. 为一次 Agent 请求建立 Trace，并为模型决策和工具执行建立 Span；
-2. 将 HTTP `request_id` 与 Agent Trace 关联；
-3. 记录模型耗时、工具耗时、成功状态和错误类型；
-4. 支持将工具结果返回模型，生成最终自然语言回答；
-5. 增加最大步骤数受控的多步 Agent Loop；
-6. 扩展更多安全、可测试的工具；
-7. 使用 PostgreSQL 保存会话、消息和执行记录；
-8. 增加 RAG、评估数据集和自动评估；
-9. 根据需要接入 Opik 等外部可观测性与评估平台。
+1. 支持将工具结果返回模型，生成最终自然语言回答；
+2. 增加最大步骤数受控的多步 Agent Loop；
+3. 扩展更多安全、可测试的工具；
+4. 使用 PostgreSQL 保存会话、消息和执行记录；
+5. 增加 RAG、评估数据集和自动评估；
+6. 根据需要接入 Opik 等外部可观测性与评估平台。

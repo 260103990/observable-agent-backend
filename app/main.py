@@ -7,6 +7,7 @@ from fastapi import FastAPI, Request
 from app.api.routes.chat import router as chat_router
 from app.api.routes.health import router as health_router
 from app.api.routes.agent import router as agent_router
+from app.api.routes.traces import router as traces_router
 
 
 request_logger = logging.getLogger("app.request")
@@ -40,6 +41,7 @@ app = FastAPI(title="Observable Agent Backend")
 app.include_router(health_router)
 app.include_router(chat_router)
 app.include_router(agent_router)
+app.include_router(traces_router)
 
 
 @app.middleware("http")
@@ -53,6 +55,8 @@ async def add_request_context(
         request.headers.get("X-Request-ID")
         or str(uuid4())
     )
+
+    request.state.request_id = request_id
 
     try:
         response = await call_next(request)
@@ -89,6 +93,14 @@ async def add_request_context(
             "process_time_ms": process_time_ms,
         },
     )
+    trace_id = getattr(
+        request.state,
+        "trace_id",
+        None,
+    )
+
+    if trace_id is not None:
+        response.headers["X-Trace-ID"] = trace_id
 
     response.headers["X-Request-ID"] = request_id
     response.headers["X-Process-Time-Ms"] = (
