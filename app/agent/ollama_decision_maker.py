@@ -1,6 +1,6 @@
 import httpx
 
-from app.schemas.agent import ToolCall
+from app.schemas.agent import ToolCall, ToolDecision
 from app.services.ollama_service import chat_with_tools
 from pydantic import ValidationError
 
@@ -27,7 +27,7 @@ class OllamaDecisionMaker:
         self,
         prompt: str,
         tool_schemas: list[dict[str, object]],
-    ) -> ToolCall:
+    ) -> ToolDecision:
         data = await chat_with_tools(
             model=self._model,
             prompt=prompt,
@@ -51,8 +51,13 @@ class OllamaDecisionMaker:
 
             function_call = tool_calls[0]["function"]
 
-            return ToolCall.model_validate(
+            tool_call = ToolCall.model_validate(
                 function_call
+            )
+
+            return ToolDecision(
+                tool_call=tool_call,
+                assistant_message=message,
             )
 
         except (

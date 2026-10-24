@@ -7,10 +7,10 @@
 - [x] 在 ollama_service.py 中构造第二轮请求，保留完整 assistant 消息。
 - [x] 增加总结请求的异步 HTTP 调用，复用现有网络异常转换。
 - [x] 增加总结组件，解析答案并拒绝缺失、非字符串、空白答案和再次工具调用。
-- [ ] 引入 ToolDecision，让决策组件保留第一轮完整消息。
-- [ ] 将 Runner、依赖组装和 HTTP 响应迁移到 result + answer 契约。
-- [ ] 增加 model.summary Span，验证成功、总结失败和 Trace 保存失败。
-- [ ] 验证真实 Runner 到 HTTP Trace 查询的完整链路。
+- [x] 引入 ToolDecision，让决策组件保留第一轮完整消息。
+- [x] 将 Runner、依赖组装和 HTTP 响应迁移到 result + answer 契约。
+- [x] 增加 model.summary Span，验证成功、总结失败和 Trace 保存失败。
+- [x] 验证真实 Runner 到 HTTP Trace 查询的完整链路。
 - [ ] 同步 README，完成全量测试、审查和提交。
 
 每项按失败测试 → 最小实现 → 定向验证 → 必要回归推进。

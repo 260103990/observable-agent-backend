@@ -4,7 +4,7 @@ from uuid import uuid4
 import logging
 from app.observability.models import SpanRecord, TraceRecord
 from app.observability.store import TraceStore
-from app.schemas.agent import ToolCall
+from app.schemas.agent import AgentRunResult, ToolDecision
 from app.tools.registry import ToolRegistry
 
 
@@ -13,19 +13,25 @@ agent_logger = logging.getLogger("app.agent")
 
 DecisionMaker = Callable[
     [str, list[dict[str, object]]],
-    Awaitable[ToolCall],
+    Awaitable[ToolDecision],
 ]
 
+Summarizer = Callable[
+    [str, ToolDecision, object],
+    Awaitable[str],
+]
 
 class AgentRunner:
     def __init__(
         self,
         registry: ToolRegistry,
         decision_maker: DecisionMaker,
+        summarizer: Summarizer,
         trace_store: TraceStore | None = None,
     ) -> None:
         self._registry = registry
         self._decision_maker = decision_maker
+        self._summarizer = summarizer
         self._trace_store = trace_store
 
     async def run(
@@ -34,7 +40,7 @@ class AgentRunner:
         *,
         request_id: str | None = None,
         trace_id: str | None = None,
-    ) -> object:
+    ) -> AgentRunResult:
         if self._trace_store is not None:
             if request_id is None or trace_id is None:
                 raise ValueError(
@@ -48,10 +54,11 @@ class AgentRunner:
         model_started_at = perf_counter()
 
         try:
-            tool_call = await self._decision_maker(
+            decision = await self._decision_maker(
                 prompt,
                 tool_schemas,
             )
+            tool_call = decision.tool_call
         except Exception as exc:
             if self._trace_store is not None:
                 finished_at = perf_counter()
@@ -179,6 +186,91 @@ class AgentRunner:
             perf_counter() - tool_started_at
         ) * 1000
 
+        summary_started_at = perf_counter()
+
+        try:
+            answer = await self._summarizer(
+                prompt,
+                decision,
+                result,
+            )
+        except Exception as exc:
+            if self._trace_store is not None:
+                finished_at = perf_counter()
+
+                summary_duration_ms = (
+                    finished_at - summary_started_at
+                ) * 1000
+
+                duration_ms = (
+                    finished_at - started_at
+                ) * 1000
+
+                error_type = type(exc).__name__
+
+                root_span = SpanRecord(
+                    span_id=str(uuid4()),
+                    parent_span_id=None,
+                    name="agent.run",
+                    status="error",
+                    duration_ms=duration_ms,
+                    attributes={},
+                    error_type=error_type,
+                )
+
+                model_span = SpanRecord(
+                    span_id=str(uuid4()),
+                    parent_span_id=root_span.span_id,
+                    name="model.decision",
+                    status="ok",
+                    duration_ms=model_duration_ms,
+                    attributes={
+                        "available_tool_count": len(tool_schemas),
+                    },
+                    error_type=None,
+                )
+
+                tool_span = SpanRecord(
+                    span_id=str(uuid4()),
+                    parent_span_id=root_span.span_id,
+                    name="tool.execute",
+                    status="ok",
+                    duration_ms=tool_duration_ms,
+                    attributes={
+                        "tool_name": tool_call.name,
+                    },
+                    error_type=None,
+                )
+
+                summary_span = SpanRecord(
+                    span_id=str(uuid4()),
+                    parent_span_id=root_span.span_id,
+                    name="model.summary",
+                    status="error",
+                    duration_ms=summary_duration_ms,
+                    attributes={},
+                    error_type=error_type,
+                )
+
+                trace = TraceRecord(
+                    trace_id=trace_id,
+                    request_id=request_id,
+                    status="error",
+                    duration_ms=duration_ms,
+                    spans=[
+                        root_span,
+                        model_span,
+                        tool_span,
+                        summary_span,
+                    ],
+                )
+
+                await self._save_trace(trace)
+
+            raise
+        summary_duration_ms = (
+            perf_counter() - summary_started_at
+        ) * 1000
         if self._trace_store is not None:
             duration_ms = (
                 perf_counter() - started_at
@@ -218,17 +310,35 @@ class AgentRunner:
                 error_type=None,
             )
 
+            summary_span = SpanRecord(
+                span_id=str(uuid4()),
+                parent_span_id=root_span.span_id,
+                name="model.summary",
+                status="ok",
+                duration_ms=summary_duration_ms,
+                attributes={},
+                error_type=None,
+            )
+
             trace = TraceRecord(
                 trace_id=trace_id,
                 request_id=request_id,
                 status="ok",
                 duration_ms=duration_ms,
-                spans=[root_span, model_span, tool_span],
+                spans=[
+                    root_span,
+                    model_span,
+                    tool_span,
+                    summary_span,
+                ],
             )
 
             await self._save_trace(trace)
 
-        return result
+        return AgentRunResult(
+            result=result,
+            answer=answer,
+        )
 
     async def _save_trace(
         self,

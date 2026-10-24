@@ -20,8 +20,14 @@ class AgentRunRequest(BaseModel):
 
 class AgentRunResponse(BaseModel):
     result: int
+    answer: str
 
 
 class ToolDecision(BaseModel):
     tool_call: ToolCall
     assistant_message: dict[str, object]
+
+
+class AgentRunResult(BaseModel):
+    result: object
+    answer: str
