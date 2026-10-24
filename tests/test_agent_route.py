@@ -7,7 +7,8 @@ from pydantic import ValidationError
 
 from app.api.dependencies import get_agent_runner
 from app.main import app
-
+from app.agent.ollama_summarizer import OllamaSummaryError
+from app.schemas.agent import AgentRunResult, ToolCall, ToolDecision
 from app.agent.ollama_decision_maker import (
     OllamaDecisionError,
 )
@@ -34,9 +35,11 @@ class FakeRunner:
         self,
         *,
         result: int = 42,
+        answer: str = "结果是 42。",
         error: Exception | None = None,
     ) -> None:
         self.result = result
+        self.answer = answer
         self.error = error
         self.prompts: list[str] = []
         self.request_ids: list[str | None] = []
@@ -48,7 +51,7 @@ class FakeRunner:
         *,
         request_id: str | None = None,
         trace_id: str | None = None,
-    ) -> int:
+    ) -> AgentRunResult:
         self.prompts.append(prompt)
         self.request_ids.append(request_id)
         self.trace_ids.append(trace_id)
@@ -56,7 +59,10 @@ class FakeRunner:
         if self.error is not None:
             raise self.error
 
-        return self.result
+        return AgentRunResult(
+            result=self.result,
+            answer=self.answer,
+        )
 
 
 def test_agent_run_request_strips_prompt():
@@ -82,41 +88,62 @@ def test_get_agent_runner_uses_settings_and_registered_tool(
 ):
     from app.api import dependencies
     from app.config import Settings
-    from app.schemas.agent import ToolCall
 
     captured = {}
 
     class FakeDecisionMaker:
         def __init__(self, **kwargs):
-            captured.update(kwargs)
+            captured["decision_settings"] = kwargs
 
-        async def __call__(
-            self,
-            prompt: str,
-            tool_schemas: list[dict[str, object]],
-        ) -> ToolCall:
+        async def __call__(self, prompt, tool_schemas):
             captured["prompt"] = prompt
             captured["tool_schemas"] = tool_schemas
 
-            return ToolCall(
+            tool_call = ToolCall(
                 name="add_numbers",
-                arguments={
-                    "a": 17,
-                    "b": 25,
+                arguments={"a": 17, "b": 25},
+            )
+
+            decision = ToolDecision(
+                tool_call=tool_call,
+                assistant_message={
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [
+                        {"function": tool_call.model_dump()},
+                    ],
                 },
             )
+
+            captured["decision"] = decision
+            return decision
+
+    class FakeSummarizer:
+        def __init__(self, **kwargs):
+            captured["summary_settings"] = kwargs
+
+        async def __call__(self, prompt, decision, tool_result):
+            captured["summary_args"] = (
+                prompt,
+                decision,
+                tool_result,
+            )
+            return "结果是 42。"
 
     monkeypatch.setattr(
         dependencies,
         "OllamaDecisionMaker",
         FakeDecisionMaker,
     )
+    monkeypatch.setattr(
+        dependencies,
+        "OllamaSummarizer",
+        FakeSummarizer,
+    )
 
     settings = Settings(
         ollama_model="test-model",
-        ollama_chat_url=(
-            "http://ollama.test/api/chat"
-        ),
+        ollama_chat_url="http://ollama.test/api/chat",
         ollama_timeout_seconds=12.5,
     )
 
@@ -133,43 +160,51 @@ def test_get_agent_runner_uses_settings_and_registered_tool(
         )
     )
 
+    expected_settings = {
+        "model": "test-model",
+        "chat_url": "http://ollama.test/api/chat",
+        "timeout_seconds": 12.5,
+        "client": None,
+    }
 
-    assert result == 42
-    assert captured["model"] == "test-model"
-    assert captured["chat_url"] == (
-        "http://ollama.test/api/chat"
-    )
-    assert captured["timeout_seconds"] == 12.5
-    assert captured["client"] is None
+    assert captured["decision_settings"] == expected_settings
+    assert captured["summary_settings"] == expected_settings
     assert captured["prompt"] == "请计算 17 + 25"
-    assert captured["tool_schemas"][0]["name"] == (
-        "add_numbers"
-    )
+    assert captured["tool_schemas"][0]["name"] == "add_numbers"
+
+    summary_prompt, decision, tool_result = captured["summary_args"]
+
+    assert summary_prompt == "请计算 17 + 25"
+    assert decision is captured["decision"]
+    assert tool_result == 42
+    assert result.result == 42
+    assert result.answer == "结果是 42。"
 
 
 def test_agent_run_returns_tool_result():
-    runner = FakeRunner(result=42)
-
-    app.dependency_overrides[get_agent_runner] = (
-        lambda: runner
+    runner = FakeRunner(
+        result=42,
+        answer="17 加 25 的结果是 42。",
     )
 
-    client = TestClient(app)
+    app.dependency_overrides[get_agent_runner] = lambda: runner
+
+    client = TestClient(
+        app,
+        raise_server_exceptions=False,
+    )
 
     response = client.post(
         "/agent/run",
-        json={
-            "prompt": "请计算 17 + 25",
-        },
+        json={"prompt": "请计算 17 + 25"},
     )
 
     assert response.status_code == 200
     assert response.json() == {
         "result": 42,
+        "answer": "17 加 25 的结果是 42。",
     }
-    assert runner.prompts == [
-        "请计算 17 + 25",
-    ]
+    assert runner.prompts == ["请计算 17 + 25"]
 
 
 def test_agent_run_passes_request_id_to_runner():
@@ -329,6 +364,11 @@ def test_agent_run_rejects_blank_prompt(prompt):
             ToolNotFoundError("unknown tool"),
             502,
             "Ollama selected an unknown tool",
+        ),
+        (
+            OllamaSummaryError("invalid summary"),
+            502,
+            "Ollama returned an invalid summary",
         ),
         (
             ToolArgumentsError("invalid arguments"),

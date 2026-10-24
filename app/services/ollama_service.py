@@ -1,4 +1,9 @@
+import json
+
+
 import httpx
+
+
 def build_payload(model: str, prompt: str) -> dict:
     return {
         "model": model,
@@ -25,6 +30,34 @@ def build_chat_payload(
                 "function": schema,
             }
             for schema in tool_schemas
+        ],
+        "stream": False,
+    }
+
+
+def build_summary_payload(
+    model: str,
+    prompt: str,
+    assistant_message: dict[str, object],
+    tool_name: str,
+    tool_result: object,
+) -> dict[str, object]:
+    return {
+        "model": model,
+        "messages": [
+            {
+                "role": "user",
+                "content": prompt,
+            },
+            assistant_message,
+            {
+                "role": "tool",
+                "tool_name": tool_name,
+                "content": json.dumps(
+                    tool_result,
+                    ensure_ascii=False,
+                ),
+            },
         ],
         "stream": False,
     }
@@ -113,6 +146,30 @@ async def chat_with_tools(
             model=model,
             prompt=prompt,
             tool_schemas=tool_schemas,
+        ),
+        timeout_seconds=timeout_seconds,
+        client=client,
+    )
+
+
+async def chat_for_summary(
+    model: str,
+    prompt: str,
+    assistant_message: dict[str, object],
+    tool_name: str,
+    tool_result: object,
+    chat_url: str,
+    timeout_seconds: float,
+    client: httpx.AsyncClient | None = None,
+) -> dict:
+    return await _post_json(
+        url=chat_url,
+        payload=build_summary_payload(
+            model=model,
+            prompt=prompt,
+            assistant_message=assistant_message,
+            tool_name=tool_name,
+            tool_result=tool_result,
         ),
         timeout_seconds=timeout_seconds,
         client=client,

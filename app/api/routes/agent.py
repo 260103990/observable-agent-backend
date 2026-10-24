@@ -6,6 +6,7 @@ from app.agent.ollama_decision_maker import (
     OllamaDecisionError,
 )
 from app.agent.runner import AgentRunner
+from app.agent.ollama_summarizer import OllamaSummaryError
 from app.api.dependencies import get_agent_runner
 from app.schemas.agent import (
     AgentRunRequest,
@@ -37,7 +38,7 @@ async def run_agent(
     request.state.trace_id = str(uuid4())
 
     try:
-        result = await runner.run(
+        run_result = await runner.run(
             body.prompt,
             request_id=request.state.request_id,
             trace_id=request.state.trace_id,
@@ -62,6 +63,11 @@ async def run_agent(
             status_code=502,
             detail="Ollama returned an invalid tool decision",
         ) from error
+    except OllamaSummaryError as error:
+        raise HTTPException(
+            status_code=502,
+            detail="Ollama returned an invalid summary",
+        ) from error
     except ToolNotFoundError as error:
         raise HTTPException(
             status_code=502,
@@ -73,4 +79,7 @@ async def run_agent(
             detail="Ollama returned invalid tool arguments",
         ) from error
 
-    return AgentRunResponse(result=result)
+    return AgentRunResponse(
+        result=run_result.result,
+        answer=run_result.answer,
+    )
