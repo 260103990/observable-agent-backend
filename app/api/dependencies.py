@@ -1,4 +1,4 @@
-from fastapi import Depends
+from fastapi import Depends, Request
 
 from app.agent.ollama_decision_maker import (
     OllamaDecisionMaker,
@@ -17,8 +17,17 @@ from app.observability.store import (
 _trace_store = InMemoryTraceStore()
 
 
-def get_trace_store() -> TraceStore:
-    return _trace_store
+def get_trace_store(
+    request: Request = None,
+) -> TraceStore:
+    if request is None:
+        return _trace_store
+
+    return getattr(
+        request.app.state,
+        "trace_store",
+        _trace_store,
+    )
 
 
 def get_agent_runner(

@@ -3,6 +3,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 
 class Settings(BaseSettings):
+    database_url: str | None = None
     ollama_model: str = "qwen2.5:1.5b"
     ollama_generate_url: str = (
         "http://127.0.0.1:11434/api/generate"

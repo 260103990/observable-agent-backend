@@ -1,13 +1,17 @@
 import logging
 from time import perf_counter
 from uuid import uuid4
+from contextlib import asynccontextmanager
 
+import asyncpg
 from fastapi import FastAPI, Request
 
 from app.api.routes.chat import router as chat_router
 from app.api.routes.health import router as health_router
 from app.api.routes.agent import router as agent_router
 from app.api.routes.traces import router as traces_router
+from app.config import get_settings
+from app.observability.store import PostgresTraceStore
 
 
 request_logger = logging.getLogger("app.request")
@@ -37,7 +41,33 @@ if not request_logger.handlers:
     request_logger.addHandler(request_handler)
 
 
-app = FastAPI(title="Observable Agent Backend")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    settings = get_settings()
+
+    if settings.database_url is None:
+        yield
+        return
+
+    pool = await asyncpg.create_pool(
+        dsn=settings.database_url,
+    )
+
+    app.state.db_pool = pool
+    app.state.trace_store = PostgresTraceStore(pool)
+
+    try:
+        yield
+    finally:
+        await pool.close()
+        del app.state.trace_store
+        del app.state.db_pool
+
+
+app = FastAPI(
+    title="Observable Agent Backend",
+    lifespan=lifespan,
+)
 app.include_router(health_router)
 app.include_router(chat_router)
 app.include_router(agent_router)
