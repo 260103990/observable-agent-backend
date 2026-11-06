@@ -1,0 +1,271 @@
+{
+  "recorded_on": "2026-11-05",
+  "kind": "historical_observation_excerpt",
+  "scope": "Known small workloads; not a production benchmark or quality accuracy score.",
+  "artifacts_published": "Aggregate metrics, version metadata and original report hashes only; no PDF, keys or full local traces.",
+  "experiments": {
+    "tool_cache": {
+      "run_id": "b41699b4-25a5-4747-9f07-515013aa6e40",
+      "verification_tier": "live",
+      "measurement_scope": "sequential_search_tool_not_agent",
+      "phases": {
+        "bypass": {
+          "requests": 4,
+          "successes": 4,
+          "failures": 0,
+          "cache_hits": 0,
+          "cache_misses": 0,
+          "cache_bypasses": 4,
+          "cache_errors": 0,
+          "search_request_attempts": 4,
+          "response_body_bytes": 78982,
+          "successful_wall_ms_median": 443.014649907127,
+          "successful_wall_ms_min": 431.37319991365075,
+          "successful_wall_ms_max": 712.6074000261724,
+          "automatic_reuse_pass": null
+        },
+        "cold": {
+          "requests": 4,
+          "successes": 4,
+          "failures": 0,
+          "cache_hits": 0,
+          "cache_misses": 4,
+          "cache_bypasses": 0,
+          "cache_errors": 0,
+          "search_request_attempts": 4,
+          "response_body_bytes": 78990,
+          "successful_wall_ms_median": 451.07744983397424,
+          "successful_wall_ms_min": 436.41649978235364,
+          "successful_wall_ms_max": 464.59419978782535,
+          "automatic_reuse_pass": null
+        },
+        "priming": {
+          "requests": 2,
+          "successes": 2,
+          "failures": 0,
+          "cache_hits": 0,
+          "cache_misses": 2,
+          "cache_bypasses": 0,
+          "cache_errors": 0,
+          "search_request_attempts": 2,
+          "response_body_bytes": 39487,
+          "successful_wall_ms_median": 498.2058999594301,
+          "successful_wall_ms_min": 458.21249997243285,
+          "successful_wall_ms_max": 538.1992999464273,
+          "automatic_reuse_pass": null
+        },
+        "warm": {
+          "requests": 4,
+          "successes": 4,
+          "failures": 0,
+          "cache_hits": 4,
+          "cache_misses": 0,
+          "cache_bypasses": 0,
+          "cache_errors": 0,
+          "search_request_attempts": 0,
+          "response_body_bytes": 0,
+          "successful_wall_ms_median": 0.2532999496906996,
+          "successful_wall_ms_min": 0.224200077354908,
+          "successful_wall_ms_max": 0.34270016476511955,
+          "automatic_reuse_pass": true
+        }
+      },
+      "manual_review": {
+        "source_quality": "pending",
+        "information_freshness": "pending",
+        "answer_quality": "not_measured_no_answer_generation"
+      },
+      "limitations": [
+        "Fixed sequential phase order and small sample; no causal/stability claim.",
+        "Response body bytes exclude requests, headers and TLS.",
+        "No Agent/LLM latency, semantic correctness or freshness benefit is measured.",
+        "Priming cost is reported separately, never hidden in warm results."
+      ],
+      "original_report_sha256": "469023c2b6c58965a2299f4c7d272897fe8eee1cdf6536f4ac41eba30b4ed25e"
+    },
+    "cold_coalescing": {
+      "run_id": "683a1e73-f44e-43bb-add6-4c75299f8406",
+      "verification_tier": "live",
+      "measurement_scope": "concurrent_search_tool_not_agent",
+      "modes": {
+        "disabled": {
+          "logical_calls": 8,
+          "successes": 8,
+          "failures": 0,
+          "search_request_attempts": 8,
+          "response_body_bytes": 143144,
+          "coalesced_calls": 0,
+          "cache_hits": 0,
+          "burst_wall_ms_median": 775.9605499450117
+        },
+        "enabled": {
+          "logical_calls": 8,
+          "successes": 8,
+          "failures": 0,
+          "search_request_attempts": 2,
+          "response_body_bytes": 35786,
+          "coalesced_calls": 6,
+          "cache_hits": 0,
+          "burst_wall_ms_median": 560.1161499507725
+        }
+      },
+      "manual_review": {
+        "source_quality": "pending",
+        "information_freshness": "pending",
+        "answer_quality": "not_measured"
+      },
+      "limitations": [
+        "Tool-level single-process sample, not Agent performance or production throughput.",
+        "Each burst starts with clear cache; barrier coordinates start but cannot guarantee network overlap.",
+        "Control validity and actual follower reuse are reported, never inferred from equal text alone.",
+        "Body bytes exclude requests, HTTP headers and TLS. Source quality/freshness are not evaluated."
+      ],
+      "original_report_sha256": "c3e317d46c24e77c310ada8f61380277734313d3b0743ee41393e686e488ae13"
+    },
+    "full_agent_cache": {
+      "measurement_scope": "full_search_agent_in_process_asgi",
+      "workload_file_sha256": "29f1cda8ce9bbe45cc793399e48a88ef36c871ce1fc37b3932fbfe44bd484f60",
+      "repeats": 2,
+      "phase_order": [
+        "bypass",
+        "cold",
+        "priming",
+        "warm"
+      ],
+      "query_policy": "Prompts constrain query/count; actual model decisions are recorded and compared.",
+      "priming_policy": "Full Agent run, its LLM/Search/API costs reported separately.",
+      "python_version": "3.11.7",
+      "packages": {
+        "httpx": "0.28.1",
+        "fastapi": "0.141.1",
+        "pydantic": "2.13.5"
+      },
+      "phases": {
+        "bypass": {
+          "case_runs": 4,
+          "completed": 4,
+          "http_failures": 0,
+          "automatic_checks_passed": 4,
+          "api_wall_ms_total": 15504.979599732906,
+          "api_wall_ms_median": 3828.589200042188,
+          "llm_duration_ms": 10340.843500103801,
+          "llm_turns": 8,
+          "tool_duration_ms": 2062.2402001172304,
+          "search_attempts": 4,
+          "response_body_bytes": 52491,
+          "cache_hits": 0,
+          "cache_misses": 0,
+          "cache_bypasses": 4,
+          "cache_errors": 0,
+          "coalesced_calls": 0
+        },
+        "cold": {
+          "case_runs": 4,
+          "completed": 4,
+          "http_failures": 0,
+          "automatic_checks_passed": 4,
+          "api_wall_ms_total": 13919.351799879223,
+          "api_wall_ms_median": 3353.7607498001307,
+          "llm_duration_ms": 9124.191500246525,
+          "llm_turns": 8,
+          "tool_duration_ms": 1783.1820002757013,
+          "search_attempts": 4,
+          "response_body_bytes": 52491,
+          "cache_hits": 0,
+          "cache_misses": 4,
+          "cache_bypasses": 0,
+          "cache_errors": 0,
+          "coalesced_calls": 0
+        },
+        "priming": {
+          "case_runs": 2,
+          "completed": 2,
+          "http_failures": 0,
+          "automatic_checks_passed": 2,
+          "api_wall_ms_total": 7626.8031001091,
+          "api_wall_ms_median": 3813.40155005455,
+          "llm_duration_ms": 5153.672099113464,
+          "llm_turns": 4,
+          "tool_duration_ms": 972.8101002983749,
+          "search_attempts": 2,
+          "response_body_bytes": 26302,
+          "cache_hits": 0,
+          "cache_misses": 2,
+          "cache_bypasses": 0,
+          "cache_errors": 0,
+          "coalesced_calls": 0
+        },
+        "warm": {
+          "case_runs": 4,
+          "completed": 4,
+          "http_failures": 0,
+          "automatic_checks_passed": 4,
+          "api_wall_ms_total": 13076.17999939248,
+          "api_wall_ms_median": 3273.420349927619,
+          "llm_duration_ms": 10024.083599448204,
+          "llm_turns": 8,
+          "tool_duration_ms": 25.13730013743043,
+          "search_attempts": 0,
+          "response_body_bytes": 0,
+          "cache_hits": 4,
+          "cache_misses": 0,
+          "cache_bypasses": 0,
+          "cache_errors": 0,
+          "coalesced_calls": 0
+        }
+      },
+      "comparison": {
+        "all_warm_profiles_match_priming": true,
+        "all_warm_visible_sources_match_priming": true,
+        "actual_profiles_match_bypass": true,
+        "source_contents_match_bypass": false,
+        "all_warm_searches_are_cache_hits": true,
+        "paired_descriptive_comparison_eligible": false,
+        "causal_or_stable_speedup_proven": false,
+        "note": "Even aligned queries do not control model sampling, live provider changes or fixed phase order."
+      },
+      "manual_review": {
+        "status": "pending",
+        "source_support": "pending",
+        "relevance": "pending",
+        "freshness": "pending",
+        "evidence_basis": "provider summaries visible to model, not fetched webpage bodies"
+      },
+      "limitations": [
+        "ASGI end-to-end within this process, not TCP deployment/load testing.",
+        "Constrained prompts and small fixed-order sample do not represent unrestricted Agent traffic.",
+        "Automatic checks and exact source reuse do not prove semantic answer correctness or current truth.",
+        "LLM generation is not cached; priming cost and failed requests remain in their own phase."
+      ],
+      "original_report_sha256": "ac355066a689c5b05d32cede15ec70b2b3eb55441f825d8cd12d6e2fd7d74c7a",
+      "workload_version": "v3.3-constrained-search-agent-2026-11-05-v1",
+      "historical_source_sha256": {
+        "app.config": "17d7c2c765bed978aed49be82b21c727229d4036f0e5fc02212883668cd4426e",
+        "app.main": "c459e90c16c78fffd23d48edcbbe3119a7286e8d7d677403e44551e0fa9a6db4",
+        "app.api.loop_dependencies": "321e33238d655f804595fa8dbba1f71b9384427c19ca1b018c51506ad3db13f3",
+        "app.api.routes.agent_loop": "691f6ccb403bad79040c501142b4289d5a652cb6b894a0b8027f67ebe62ac619",
+        "app.agent.loop_runner": "c3f5eb9c4f3612c79faf4a59786333680e391f6df5f88e88796dcea675e7a8a0",
+        "app.agent.loop_models": "4a71ab9845e2235c6efda0c438bcd132a0cd1e69cb0984f9a89cfc9aab2788fb",
+        "app.agent.loop_trace": "add14636a2bbaf9420e6bc157a75e669a43e899f0ea4186189727ff8d7c0c872",
+        "app.agent.deepseek_loop": "878de4a48db8c9e3b15a3a00426adea84caa9ae93e42ed878d4ff681b504be5c",
+        "app.agent.final_output": "3c44abc64d7328c533d38c87c0a1c0ccc42bdfc3fae9fffc4913c9a1b1b3edff",
+        "app.agent.web_evidence": "834cb216f7bc4d69558c6929dd98b8214b79363d6da1ad81f639f8c225f5e5f2",
+        "app.tools.web_search": "b8b9f517334de84e3e35ed15aab63b7f6dfdc557a97e139e7e37804fef4bd71a",
+        "app.tools.web_models": "067bdf4eb4c60c23f592c1385c0580f74d2915b01ce32e6d52ecb2a7e9d89782",
+        "app.tools.search_cache": "347e0ce3e6f475396ed0878b4c02507df48fcfcadfad20944fb2d428af13bf85",
+        "app.tools.search_coalescing": "7227771da6b9c15718b55ccab21ec02c89a7877699c66074863e1a670e507fa7",
+        "app.evaluation.runtime": "6d3f1fcdeb5802d61b906f466b36293235fe53c92eeb1cfe58aafffdfe8f6cbe",
+        "app.evaluation.runner": "e59bf0d70f0918063113c8ecf26d69512b7d4ca3839e937fad7a31069f4b0c27",
+        "app.evaluation.recording": "711704ad347630bf807e4d8cb0c67be4dd6255a7f42ea794897e0ad59869ab87",
+        "app.evaluation.scoring": "042de7e792f88b1dc89c769bf0bcb539a2d24f336bf4465e097bf239777b4866",
+        "app.evaluation.models": "ea6b362776980a47314fa34c5e0149ffbf16eb1f828fcc0bdaaa62887339ac2a"
+      },
+      "phase_run_ids": {
+        "bypass": "a2eed971-de21-44b1-928f-e7e1380b540c",
+        "cold": "9ff91d6b-4d12-45dc-90a9-db9c968f06e5",
+        "priming": "529c73ba-f196-472e-b581-1f3016924491",
+        "warm": "9c419e59-8e5d-48e7-ba0a-cb48b5d49eb9"
+      }
+    }
+  }
+}

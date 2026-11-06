@@ -1,0 +1,68 @@
+{
+  "version": "v2.3-cortex-search-2026-11-04-v1",
+  "paper_sha256": "6ff209393c7c565ade65d236d837bdf509a0361fb8b7b7954e12b729dc50d5fa",
+  "cases": [
+    {
+      "id": "calculation",
+      "prompt": "计算 (17 + 25) + 42，请使用计算工具验证结果。",
+      "required_tools": ["add_numbers"],
+      "allowed_tools": ["add_numbers"],
+      "answer_terms": [["84"]],
+      "reference_notes": "Expected arithmetic result 84; no external search needed."
+    },
+    {
+      "id": "paper_models",
+      "prompt": "这篇论文的实验分别使用哪些语言模型？请列出模型名称，并保留论文证据。",
+      "use_paper": true,
+      "required_tools": ["paper_retrieval"],
+      "allowed_tools": ["paper_retrieval", "add_numbers"],
+      "expected_pages": [10],
+      "expected_insufficient": false,
+      "answer_terms": [["Search-R1"], ["Qwen-3 8B", "Qwen3-8B", "Qwen3 8B", "Qwen-3-8B"]],
+      "reference_notes": "PDF10 Experimental Setup: Search-R1-7B, Qwen-3 8B; internal Qwen-3 0.6B embedding/semantic judging is additional context."
+    },
+    {
+      "id": "paper_datasets",
+      "prompt": "这篇论文的实验使用了哪些数据集？列出名称，不要把参考文献中出现的数据集自动当作实验采用。",
+      "use_paper": true,
+      "required_tools": ["paper_retrieval"],
+      "allowed_tools": ["paper_retrieval", "add_numbers"],
+      "expected_pages": [13],
+      "expected_insufficient": false,
+      "answer_terms": [["Musique"], ["NQ", "Natural Questions"], ["2Wiki"], ["HotpotQA"], ["StrategyQA"]],
+      "reference_notes": "PDF13 Figure13 names Musique/NQ/2Wiki/HotpotQA/StrategyQA; nearby body explicitly discusses HotpotQA and Musique. Figure labels are supporting text, not a numeric chart-reading benchmark."
+    },
+    {
+      "id": "paper_unsupported",
+      "prompt": "这篇论文报告了在火星服务器上部署 Cortex 的实验吗？没有足够论文证据就明确说明不足。",
+      "use_paper": true,
+      "required_tools": ["paper_retrieval"],
+      "allowed_tools": ["paper_retrieval", "add_numbers"],
+      "expected_insufficient": true,
+      "reference_notes": "Negative smoke case; a single absence case cannot measure hallucination rate."
+    },
+    {
+      "id": "web_function_calling",
+      "prompt": "请查找 DeepSeek 官方 Tool Calls 文档，说明 function calling 中实际函数由谁执行，并给出来源。",
+      "enable_web_search": true,
+      "required_tools": ["web_search"],
+      "allowed_tools": ["web_search", "add_numbers"],
+      "expected_web_domains": ["api-docs.deepseek.com"],
+      "expected_insufficient": false,
+      "reference_notes": "Official Tool Calls guide states the caller supplies and executes the function; model generates requested function/arguments. Domain presence is a provenance check, not entailment."
+    },
+    {
+      "id": "mixed_models",
+      "prompt": "先依据这篇论文说明实验使用的语言模型，再查找这些模型的官方资料，比较论文中的模型名称与公开资料是否一致。分别保留论文与外部来源。",
+      "use_paper": true,
+      "enable_web_search": true,
+      "required_tools": ["paper_retrieval", "web_search"],
+      "allowed_tools": ["paper_retrieval", "web_search", "add_numbers"],
+      "expected_pages": [10],
+      "expected_web_domains": ["huggingface.co", "github.com", "qwenlm.github.io"],
+      "expected_insufficient": false,
+      "answer_terms": [["Search-R1"], ["Qwen"]],
+      "reference_notes": "PDF10 identifies experiment models. Hosting domain alone does not prove model-card author identity; manually verify each returned URL and qualifier."
+    }
+  ]
+}

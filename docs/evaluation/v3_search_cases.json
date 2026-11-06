@@ -1,0 +1,7 @@
+{
+  "version": "v3.1-search-cache-2026-11-05-v1",
+  "cases": [
+    {"id": "small_model", "query": "Qwen3-0.6B Hugging Face official model card", "count": 5},
+    {"id": "large_model", "query": "Qwen/Qwen3-8B Hugging Face model card official", "count": 5}
+  ]
+}

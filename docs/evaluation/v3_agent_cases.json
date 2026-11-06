@@ -1,0 +1,28 @@
+{
+  "version": "v3.3-constrained-search-agent-2026-11-05-v1",
+  "paper_sha256": "6ff209393c7c565ade65d236d837bdf509a0361fb8b7b7954e12b729dc50d5fa",
+  "cases": [
+    {
+      "id": "official_function_execution",
+      "prompt": "请进行一次web_search：query精确使用 DeepSeek tool calls site:api-docs.deepseek.com function execution，count=3。根据返回的官方证据，用中文简洁回答：function calling中，实际函数是由模型服务执行，还是由调用方的应用执行？保留来源，证据不足就说明，不需要继续扩展搜索。",
+      "enable_web_search": true,
+      "required_tools": ["web_search"],
+      "allowed_tools": ["web_search"],
+      "expected_web_domains": ["api-docs.deepseek.com"],
+      "expected_insufficient": false,
+      "answer_terms": [["调用方", "调用者", "应用", "后端", "客户端"]],
+      "reference_notes": "Constrained query/count workload; compare actual tool args. Domain/term checks do not prove semantic support."
+    },
+    {
+      "id": "official_embedding_size",
+      "prompt": "请进行一次web_search：query精确使用 Qwen3-Embedding-0.6B site:huggingface.co/Qwen，count=3。根据官方模型卡证据，用中文简洁说明Qwen3-Embedding-0.6B的参数规模。保留来源，不要猜测，不需要更多搜索。",
+      "enable_web_search": true,
+      "required_tools": ["web_search"],
+      "allowed_tools": ["web_search"],
+      "expected_web_domains": ["huggingface.co"],
+      "expected_insufficient": false,
+      "answer_terms": [["0.6B", "0.6 B", "6亿", "6 亿"]],
+      "reference_notes": "Hosting hostname alone does not prove author identity; review Qwen account/model path and actual visible summary."
+    }
+  ]
+}
