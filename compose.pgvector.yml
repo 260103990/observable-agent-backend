@@ -1,0 +1,21 @@
+name: observable-agent-vector-dev
+services:
+  postgres:
+    image: pgvector/pgvector:0.8.7-pg17-trixie
+    container_name: observable-agent-pgvector-dev
+    environment:
+      POSTGRES_USER: agent
+      POSTGRES_PASSWORD: agent_dev_password
+      POSTGRES_DB: observable_agent
+    ports:
+      - "127.0.0.1:55433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agent -d observable_agent"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+volumes:
+  pgdata:
+    name: observable-agent-pgvector-data

@@ -1,469 +1,107 @@
 # Observable Agent Backend
 
-一个用于学习 Python 后端与 AI Agent 工程的 FastAPI 项目。
+[![tests](https://github.com/260103990/observable-agent-backend/actions/workflows/tests.yml/badge.svg)](https://github.com/260103990/observable-agent-backend/actions/workflows/tests.yml)
 
-当前版本提供普通聊天接口、可测试的单步 Tool Calling Agent，以及请求级日志、Agent Trace、Trace 查询、配置管理和错误转换。Agent 会先让模型选择工具，再将工具执行结果交给模型，生成最终自然语言回答。
+一个以论文阅读为应用场景、以外部搜索缓存为实验方向的 **Python Agent 后端**。实现论文 RAG、受控多轮 Tool Calling、Web Search、Trace/Span，以及可复现的精确搜索缓存实验。
 
-> 当前项目仍处于学习和迭代阶段，不是生产级 Agent 平台。
-> 一次成功的 Agent 请求包含两次模型调用和一次工具执行；Trace 保存在当前进程的内存中。
+关注的不只是模型回答，还包括数据如何持久化、工具如何受控执行、请求在哪里耗时，以及缓存究竟省掉了什么。当前是可运行的工程与研究实验基线；回答质量和生产部署仍有明确边界。
 
-## 当前功能
+## 已实现
 
-### HTTP API
+| 模块 | 实际能力 |
+|---|---|
+| 论文 RAG | PDF→清洗/切分→本地 Embedding→PostgreSQL/pgvector→单篇检索→DeepSeek→来源/PDF 页码引用 |
+| Agent Loop | 原生工具协议、参数校验、多轮顺序调用、轮数/调用数/时间/上下文预算、有界错误恢复 |
+| 工具 | `add_numbers`、`paper_retrieval`、可选 `web_search`；保留原单步 Agent API |
+| 可观测性 | 请求 ID、阶段 Span、失败状态、模型/工具/Search 延迟、尝试次数、响应体字节、Cache Hit/Miss |
+| Search 缓存 | 精确键、非滑动 TTL、LRU、容量预算、同 key 并发合并、取消传播、当前 Trace 与原来源关联 |
+| 评估 | 无缓存/冷缓存/独立预热/热缓存，工具层与完整 Agent 分层，保留失败和质量待审状态 |
 
-- `GET /health`：检查后端服务是否正常。
-- `POST /chat`：调用 Ollama `/api/generate` 生成文本回答。
-- `POST /agent/run`：让 Ollama 选择一个已注册工具并执行，再根据工具结果生成最终回答。
-- `GET /traces/{trace_id}`：按 Trace ID 查询执行记录；记录不存在时返回 `404`。
-
-四个接口分别在 OpenAPI 文档中归类为 `health`、`chat`、`agent` 和 `traces`。
-
-### 单步 Agent 与最终回答
-
-当前 Agent 执行过程：
-
-1. 将 Tool Registry 中的工具导出为 JSON Schema；
-2. 第一次调用 Ollama `/api/chat`，发送用户 prompt 和工具 Schema；
-3. 要求模型返回且只返回一个 Tool Call，解析工具名称和参数，并保留完整的 assistant 消息；
-4. 检查工具是否位于注册表白名单中，使用 Pydantic 校验工具参数；
-5. 执行工具，得到原始结果 `result`；
-6. 第二次调用 Ollama `/api/chat`，发送原始用户消息、第一次的完整 assistant 消息，以及包含工具结果的 tool 消息；
-7. 校验模型返回的最终回答 `answer`，然后同时返回 `result` 和 `answer`。
-
-第二次请求不再提供工具 Schema，工具结果会先序列化为 JSON 字符串。最终回答必须是非空白字符串；如果模型再次返回非空的 `tool_calls`，本次请求会失败。
-
-当前只注册了一个工具：
-
-```text
-add_numbers(a: int, b: int) -> int
-```
-
-示例流程：
-
-```text
-用户请求：“请使用工具计算 17 + 25，并给出最终回答”
-        ↓
-第一次模型调用：选择 add_numbers，参数为 {"a": 17, "b": 25}
-        ↓
-Tool Registry 校验并执行：得到整数 42
-        ↓
-第二次模型调用：根据原始请求、工具决策消息和工具结果生成回答
-        ↓
-返回 {"result": 42, "answer": "17 + 25 的结果是 42。"}
-```
-
-`result` 是工具计算得到的原始结果；`answer` 是模型根据工具结果生成的用户可读回答，具体措辞取决于模型。
-
-这里的“单步”指每次请求只执行一个工具。成功路径固定为“模型决策 → 工具执行 → 模型总结”，目前还没有自主决定是否继续调用工具的多步 Agent Loop，也没有跨请求的对话历史。
-
-### 后端工程能力
-
-- 使用 Pydantic 校验 HTTP 请求和工具参数；
-- 使用 `pydantic-settings` 读取默认值、环境变量和 `.env`；
-- 使用 FastAPI `Depends` 组装工具注册表、模型决策组件、总结组件和共享 `TraceStore`；
-- 使用 HTTPX 异步调用 Ollama；
-- 使用自定义异常隔离网络层、Agent 层和 API 层；
-- 使用 pytest、依赖覆盖和 `httpx.MockTransport` 进行离线测试。
-
-### 请求级可观测性
-
-- 自动生成或保留 `X-Request-ID`；
-- 使用 `X-Process-Time-Ms` 返回服务端处理耗时；
-- 使用结构化日志记录请求方法、路径、状态码、耗时和异常类型；
-- 未处理异常会记录 traceback，并继续交由 Starlette 返回 HTTP `500`。
-
-### Agent 级可观测性
-
-- 使用共享 `TraceStore` 连接真实 `AgentRunner` 与 Trace 查询接口；
-- 一次成功执行包含 `agent.run`、`model.decision`、`tool.execute` 和 `model.summary` 四个 Span；
-- 三个阶段 Span 都以 `agent.run` 为父 Span，总耗时包含最终回答生成阶段；
-- 记录执行状态、各阶段耗时和失败阶段的异常类型；
-- 使用 `request_id` 将 Agent Trace 与 HTTP 请求关联，成功响应通过 `X-Trace-ID` 返回 Trace ID；
-- Trace 保存失败时记录 `trace_save_failed` 警告，保留原本的业务结果或业务异常。
-
-失败时会保留已经执行的阶段，不会继续执行后续阶段：
-
-| 执行结果 | `agent.run` | `model.decision` | `tool.execute` | `model.summary` |
-| --- | --- | --- | --- | --- |
-| 全部成功 | `ok` | `ok` | `ok` | `ok` |
-| 模型决策失败 | `error` | `error` | 未执行 | 未执行 |
-| 工具执行失败 | `error` | `ok` | `error` | 未执行 |
-| 最终回答生成失败 | `error` | `ok` | `ok` | `error` |
-
-`ok` 表示该阶段没有抛出异常并通过了现有校验，不代表模型回答的内容一定正确。
+向量检索保持默认；可选 PostgreSQL 全文+向量 RRF 混合检索。回答聚焦提示实验默认关闭：真实结果未证明稳定收益，没有把实验写成已解决的质量问题。
 
 ## 架构
 
-```text
-Client
-  ↓
-Request Context Middleware
-  request_id / timing / structured logs
-  ↓
-FastAPI
-  ├── POST /chat
-  │     ChatRequest → Ollama /api/generate → ChatResponse
-  │
-  ├── POST /agent/run
-  │     AgentRunRequest
-  │       ↓
-  │     AgentRunner
-  │       ├── Tool Registry 导出工具 Schema
-  │       ├── OllamaDecisionMaker → /api/chat（第一次模型调用）
-  │       │     返回 ToolDecision：ToolCall + 完整 assistant 消息
-  │       ├── Tool Registry 白名单检查、参数校验和工具执行
-  │       │     得到 result
-  │       └── OllamaSummarizer → /api/chat（第二次模型调用）
-  │             得到 answer
-  │       ↓
-  │     AgentRunResult → AgentRunResponse {result, answer}
-  │
-  └── GET /traces/{trace_id}
-        通过共享 TraceStore 查询 TraceRecord
-
-AgentRunner → 共享 InMemoryTraceStore ← Trace 查询接口
+```mermaid
+flowchart LR
+    Client --> API[FastAPI]
+    API --> RAG[Paper RAG]
+    RAG --> PG[(PostgreSQL / pgvector)]
+    API --> Loop[Bounded Agent Loop]
+    Loop --> Retrieval[paper_retrieval]
+    Retrieval --> RAG
+    Loop --> Search[web_search]
+    Search --> Cache[Exact TTL / LRU cache]
+    Cache -->|miss / coalesced owner| SearchAPI[DeepSeek Search]
+    Loop --> LLM[DeepSeek generation]
+    API --> Trace[TraceStore / Spans]
 ```
 
-## 项目结构
+数据库保存论文、页面、Chunk/向量和 Trace；缓存只保存可复用的 Search 结果快照。Search 缓存不等于最终答案缓存，也不等于 RAG 检索缓存。
 
-省略各包的 `__init__.py`：
+## 先运行测试，再体验 API
 
-```text
-observable-agent-backend/
-├── app/
-│   ├── agent/
-│   │   ├── ollama_decision_maker.py   # 解析工具决策并保留 assistant 消息
-│   │   ├── ollama_summarizer.py       # 根据工具结果生成并校验最终回答
-│   │   └── runner.py                  # 编排模型决策、工具执行、总结和 Trace
-│   ├── api/
-│   │   ├── dependencies.py            # AgentRunner 与共享 TraceStore 的依赖组装
-│   │   └── routes/
-│   │       ├── agent.py               # POST /agent/run
-│   │       ├── chat.py                # POST /chat
-│   │       ├── health.py              # GET /health
-│   │       └── traces.py              # GET /traces/{trace_id}
-│   ├── observability/
-│   │   ├── models.py                  # TraceRecord 与 SpanRecord
-│   │   └── store.py                   # TraceStore 协议与内存实现
-│   ├── schemas/
-│   │   ├── agent.py                   # Agent 请求、响应、内部结果与工具决策
-│   │   └── chat.py                    # Chat 请求与响应
-│   ├── services/
-│   │   └── ollama_service.py          # Ollama HTTP 调用与请求体构造
-│   ├── tools/
-│   │   ├── calculator.py              # add_numbers 工具
-│   │   └── registry.py                # 工具注册、Schema 和执行
-│   ├── config.py                      # 环境配置
-│   └── main.py                        # FastAPI 应用与请求中间件
-├── tests/
-│   ├── test_agent_route.py
-│   ├── test_agent_runner.py
-│   ├── test_agent_tracing.py
-│   ├── test_calculator.py
-│   ├── test_chat.py
-│   ├── test_chat_schemas.py
-│   ├── test_config.py
-│   ├── test_health.py
-│   ├── test_ollama_decision_maker.py
-│   ├── test_ollama_service.py
-│   ├── test_ollama_summarizer.py
-│   ├── test_ollama_summary.py
-│   ├── test_request_context.py
-│   ├── test_tool_registry.py
-│   ├── test_trace_dependencies.py
-│   ├── test_trace_route.py
-│   └── test_trace_store.py
-├── docs/superpowers/                  # 功能设计与实现计划
-├── .env.example
-├── requirements.txt
-└── README.md
-```
+需要 Python 3.11。默认测试使用受控外部服务替身，不需要密钥、Ollama 或数据库。
 
-## 环境要求
-
-- Python 3.11 或更高版本
-- Ollama
-- 本地模型 `qwen2.5:1.5b`
-
-检查已有模型：
-
-```powershell
-ollama list
-```
-
-如果模型尚未安装：
-
-```powershell
-ollama pull qwen2.5:1.5b
-```
-
-## 安装
-
-进入项目主目录后执行：
-
-```powershell
+```bash
+git clone https://github.com/260103990/observable-agent-backend.git
+cd observable-agent-backend
 python -m venv .venv
-.venv\Scripts\Activate.ps1
+# Linux/macOS: source .venv/bin/activate
+# PowerShell: .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
-Copy-Item .env.example .env
-```
-
-## 配置
-
-`.env.example` 包含：
-
-```dotenv
-OLLAMA_MODEL=qwen2.5:1.5b
-OLLAMA_GENERATE_URL=http://127.0.0.1:11434/api/generate
-OLLAMA_CHAT_URL=http://127.0.0.1:11434/api/chat
-OLLAMA_TIMEOUT_SECONDS=120
-```
-
-- `OLLAMA_MODEL`：聊天和 Agent 使用的本地模型；
-- `OLLAMA_GENERATE_URL`：`/chat` 使用的 Ollama 接口；
-- `OLLAMA_CHAT_URL`：Agent 的工具决策和最终回答生成使用的 Ollama 接口；
-- `OLLAMA_TIMEOUT_SECONDS`：每次 Ollama HTTP 调用使用的超时配置，单位为秒；不是整个 Agent 流程的总超时。
-
-## 运行测试
-
-```powershell
 python -m pytest -q
-```
-
-测试覆盖：
-
-- `/health`、`/chat`、`/agent/run` 和 `/traces/{trace_id}`；
-- 请求数据清理、空字符串拒绝和 OpenAPI 路由标签；
-- FastAPI 依赖覆盖、共享 Store 和真实 Runner 的依赖组装；
-- Ollama 请求构造、Tool Call 数量约束与完整 assistant 消息保留；
-- Tool Registry 注册、重复注册、白名单检查和 Pydantic 参数校验；
-- 工具结果回传、最终回答解析，以及空回答、错误格式和再次调用工具的拒绝；
-- Ollama 网络错误、HTTP 错误和 Agent 路由的 `502`、`503`、`504` 映射；
-- 请求 ID、处理耗时和结构化日志；
-- 四个 Span 的父子关系、阶段状态、异常类型与耗时；
-- Trace 存取、保存失败处理，以及 Agent 执行到 HTTP 查询的集成验证。
-
-测试使用模型组件替身、依赖覆盖和 `httpx.MockTransport`，因此不需要启动 Ollama，也不会加载真实模型。真实的 Runner、工具注册表和内存 Store 可以在离线环境中验证。
-
-## 启动服务
-
-确认 Ollama 正在运行，然后启动 FastAPI：
-
-```powershell
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-交互式 API 文档：
+打开 [Swagger UI](http://127.0.0.1:8000/docs)，或请求 `GET /health`。默认可以启动基础服务；模型接口需要另行配置对应服务，RAG/Web Search/缓存均默认关闭。
 
-```text
-http://127.0.0.1:8000/docs
-```
+完整的 [快速启动](docs/quickstart.md) 包含本地模型、全新 pgvector 演示库初始化、论文上传/问答、Agent 请求及实验运行。
 
-## API
+## HTTP 接口
 
-### Health Check
+| 接口 | 用途 |
+|---|---|
+| `GET /health` | 服务健康检查 |
+| `POST /chat` | Ollama 文本生成 |
+| `POST /agent/run` | 保留的 Ollama 单步工具调用 |
+| `POST /agent/loop` | DeepSeek 受控多轮工具调用；可指定论文并显式请求 Web Search |
+| `POST /papers` | multipart PDF 导入 |
+| `POST /papers/{paper_id}/questions` | 指定论文问答与来源引用 |
+| `GET /traces/{trace_id}` | 查询当前配置 TraceStore 中的执行记录 |
 
-```http
-GET /health
-```
+成功处理 HTTP 请求不一定表示任务完成：还应查看 `status`、`stop_reason`、`insufficient_evidence`。JSON 和引用 ID 合法也不代表每个事实都正确。
 
-响应：
+## 可以核对的验证结果
 
-```json
-{
-  "status": "ok"
-}
-```
+最近一次本地默认验证为 **691 passed、5 skipped、31 deselected**；真实测试数据库验证为 **25 passed、6 skipped**。默认测试包含单元与受控 ASGI 集成；数据库测试中的模型仍可为受控替身，真实外部服务结果另行记录。CI 在 Linux/Windows 上独立运行默认测试。
 
-### Chat
+真实小样本缓存实验（2026-11-05）：
 
-```http
-POST /chat
-Content-Type: application/json
-```
+| 实验 | 观察结果 | 边界 |
+|---|---|---|
+| 完整 Search Agent | 无缓存 4 次问答产生 4 个 Search 请求；预热后 4 次问答产生 0 个 Search 请求 | 热阶段仍有 8 次 LLM 调用；预热另花 2 个 Search 请求 |
+| 同 key 冷请求并发 | 4 并发×2轮：关闭合并 8 个 Search 请求；开启合并 2 个 | 6 次等待复用，TTL hits 均为 0；单进程、小样本 |
 
-请求：
+这些数据证明特定工作负载中确实减少了 Search 请求，不能直接写成稳定端到端加速或更高回答准确率。完整 Agent 的部分来源摘要在阶段间变化，因此未宣称严格可配对的因果加速。
 
-```json
-{
-  "message": "请用一句中文介绍你自己"
-}
-```
+查看 [实验协议、原始指标摘录与复现入口](docs/evaluation.md) 和 [验证层次与已知限制](docs/validation.md)。
 
-响应示例：
+## 设计要点与局限
 
-```json
-{
-  "answer": "模型生成的回答"
-}
-```
+- 导入按事务保存元数据、页面与 Chunk/向量；原文与规范化文本及字符范围可追溯，已保存论文按不可变导入处理。
+- asyncpg pool 由 FastAPI lifespan 管理；请求借用资源，关闭和取消路径有测试。
+- 只读且明确标记的瞬时错误才允许有限重试；不盲目重试有副作用工具。
+- Search 默认使用提供方摘要，**没有抓取网页正文**；缓存命中保留原获取时间，TTL 不保证事实仍新鲜。
+- 缓存与并发合并仅在单进程内共享；尚未实现 Redis、跨进程合并或语义缓存。
+- 复杂 PDF 布局/图表可能影响召回，引用校验不等于语义蕴含；真实实验仍出现漏项、范围错误、资料不足和执行预算终止。
+- 应用容器化、生产部署、独立质量盲评和大规模负载测试属于后续工作。
 
-PowerShell 示例：
+## 从哪里读代码
 
-```powershell
-$body = @{
-    message = "请用一句中文介绍你自己"
-} | ConvertTo-Json
+1. [架构与数据流](docs/architecture.md)：模块职责、表关系、事务、资源和错误路径。
+2. [核心 Loop](app/agent/loop_runner.py)：模型决策、预算、工具执行和最终校验。
+3. [持久化与检索](app/rag/store.py)：参数化 SQL、只读快照、余弦/可选混合检索。
+4. [Search 缓存](app/tools/search_cache.py) / [并发合并](app/tools/search_coalescing.py)。
+5. [面试讲解提纲](docs/interview.md)：围绕真实实现讲取舍，不把计划功能当作成果。
 
-Invoke-RestMethod `
-    -Method Post `
-    -Uri "http://127.0.0.1:8000/chat" `
-    -ContentType "application/json; charset=utf-8" `
-    -Body ([System.Text.Encoding]::UTF8.GetBytes($body)) `
-    -TimeoutSec 120
-```
-
-### Agent Run
-
-```http
-POST /agent/run
-Content-Type: application/json
-```
-
-请求：
-
-```json
-{
-  "prompt": "请使用 add_numbers 工具计算 17 + 25，并根据工具结果给出最终回答。"
-}
-```
-
-成功响应示例：
-
-```json
-{
-  "result": 42,
-  "answer": "17 + 25 的结果是 42。"
-}
-```
-
-其中 `result` 为整数，`answer` 为字符串。最终回答的具体措辞可能不同。
-
-响应头示例：
-
-```http
-X-Request-ID: 550e8400-e29b-41d4-a716-446655440000
-X-Trace-ID: 80e6dddd-b1a3-4799-bc7c-1f628db0844c
-X-Process-Time-Ms: 1500.00
-```
-
-PowerShell 示例：
-
-```powershell
-$body = @{
-    prompt = "请使用 add_numbers 工具计算 17 + 25，并根据工具结果给出最终回答。"
-} | ConvertTo-Json
-
-Invoke-RestMethod `
-    -Method Post `
-    -Uri "http://127.0.0.1:8000/agent/run" `
-    -ContentType "application/json; charset=utf-8" `
-    -Body ([System.Text.Encoding]::UTF8.GetBytes($body)) `
-    -TimeoutSec 300
-```
-
-Agent 成功时需要两次模型调用，因此客户端示例使用更长的等待时间。服务端的 `OLLAMA_TIMEOUT_SECONDS` 分别用于每次模型请求。
-
-真实运行还要求本地模型正确返回工具决策和有效的最终回答。自动化测试使用预设响应验证流程，不依赖模型生成内容的确定性。
-
-### Trace Query
-
-读取 Agent 响应头中的 `X-Trace-ID`，用它查询同一服务进程中的执行记录：
-
-```http
-GET /traces/80e6dddd-b1a3-4799-bc7c-1f628db0844c
-```
-
-PowerShell 示例：
-
-```powershell
-# 将示例值替换为本次 Agent 响应头中的 X-Trace-ID
-$traceId = "80e6dddd-b1a3-4799-bc7c-1f628db0844c"
-Invoke-RestMethod -Method Get -Uri "http://127.0.0.1:8000/traces/$traceId"
-```
-
-成功时返回 `TraceRecord`，包含 `trace_id`、`request_id`、`status`、`duration_ms` 和 `spans`。每个 Span 包含 ID、父 Span ID、名称、状态、耗时、属性和异常类型。
-
-记录不存在时返回 HTTP `404`：
-
-```json
-{
-  "detail": "Trace not found"
-}
-```
-
-当前使用内存存储，服务重启后，之前的 Trace ID 将无法查到原记录。如果 Trace 保存失败，业务响应仍会保留，但查询对应记录时可能得到 `404`。
-
-## HTTP 状态码
-
-通用状态码：
-
-- `200 OK`：请求处理成功；
-- `404 Not Found`：请求路径不存在，或指定的 Trace 不存在；
-- `405 Method Not Allowed`：路径存在，但不支持该 HTTP 方法；
-- `422 Unprocessable Content`：请求 JSON 不符合 Pydantic 模型；
-- `500 Internal Server Error`：发生尚未处理的服务器异常。
-
-Ollama 相关状态码：
-
-- `502 Bad Gateway`：Ollama 返回错误状态；
-- `503 Service Unavailable`：无法连接 Ollama；
-- `504 Gateway Timeout`：等待 Ollama 响应超时。
-
-`/agent/run` 还会在以下情况返回 `502`：
-
-- Ollama 返回无法解析或数量不符合要求的工具决策；
-- Ollama 选择未注册工具；
-- Ollama 提供不符合工具 Schema 的参数；
-- 最终回答响应不是有效 JSON、格式不符合要求、内容不是字符串、为空或仅包含空白；
-- 最终回答阶段再次返回非空的 `tool_calls`。
-
-最终回答格式错误时，响应正文为 `{"detail": "Ollama returned an invalid summary"}`。该阶段发生连接失败或超时时，仍分别返回 `503` 或 `504`。
-
-API 不会把底层 HTTPX、Pydantic 或 Registry 异常直接暴露给客户端。
-
-## 请求可观测性
-
-每个正常 HTTP 响应都会包含：
-
-```http
-X-Request-ID: 550e8400-e29b-41d4-a716-446655440000
-X-Process-Time-Ms: 3.14
-```
-
-客户端可以主动传入 `X-Request-ID`。如果没有传入，服务端会自动生成 UUID。Agent 请求还会生成独立的 `trace_id`，用于关联内部阶段记录。
-
-正常请求日志示例：
-
-```text
-INFO app.request request_completed request_id=live-log-001 method=POST path=/agent/run status_code=200 process_time_ms=1500.00 exception_type=-
-```
-
-未处理异常使用 `request_failed` 事件和 `ERROR` 级别，并记录异常类型与 traceback。
-
-HTTP 请求日志用于查看请求状态和处理耗时；Agent 内部的模型决策、工具执行和最终回答生成阶段可以通过 Trace 查询接口查看。
-
-## 当前限制
-
-- Agent 只支持固定的“决策 → 单工具执行 → 总结”流程；
-- 当前只注册了 `add_numbers`；
-- 没有多步 Agent Loop、最大步数和循环检测；
-- 没有对话历史和长期记忆；
-- 没有数据库、Redis、RAG 或向量检索；
-- 只支持 Ollama，不支持其他模型提供商；
-- Trace 仅保存在当前进程内存中，重启后丢失，多个进程之间不共享；
-- 最终回答校验只检查格式，不验证模型是否准确复述了工具结果；
-- 尚未记录模型 Token 用量；
-- 没有重试、限流、认证、权限控制和生产部署配置；
-- HTTP 响应中的 `result` 字段目前限定为整数，尚未支持通用工具结果。
-
-## 后续学习与开发方向
-
-以下为建议推进顺序，具体范围在各阶段开始前确定：
-
-1. **SQL 与 PostgreSQL**：先学习表、增删改查、关联、事务和索引，再为运行记录、Trace 和 Span 增加持久化，实现服务重启后仍可查询；
-2. **受控的 Agent Loop**：让模型根据已有结果决定继续调用工具或结束，增加最大步数限制，并扩展安全、可测试的工具；
-3. **Redis**：结合实际查询需求练习缓存和 TTL，再按需求增加限流；
-4. **会话与检索**：保存会话、消息和上下文，逐步增加 RAG、评估数据集和自动评估；
-5. **实验任务后台**：在执行循环和存储基础上，练习后台任务、实验记录与报告生成；
-6. 根据需要接入外部可观测性与评估平台。
+公开仓库只包含代码、测试、可复现工作负载和精选工程文档；密钥、论文文件、数据库与本地实验全文不随仓库提交。

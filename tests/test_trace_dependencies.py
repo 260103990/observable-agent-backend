@@ -1,6 +1,7 @@
 import asyncio
 from uuid import uuid4
 from fastapi.testclient import TestClient
+from fastapi import FastAPI, Request
 
 from app.main import app
 from app.schemas.agent import ToolCall, ToolDecision
@@ -126,3 +127,32 @@ def test_real_agent_runner_saves_trace_in_shared_store(
     assert trace_response.json() == trace.model_dump(
         mode="json"
     )
+
+
+def test_get_trace_store_uses_store_from_request_app():
+    request_app = FastAPI()
+    request_store = InMemoryTraceStore()
+    request_app.state.trace_store = request_store
+
+    request = Request({
+        "type": "http",
+        "app": request_app,
+    })
+
+    actual = dependencies.get_trace_store(request=request)
+
+    assert actual is request_store
+
+
+def test_get_trace_store_falls_back_when_app_has_no_store():
+    request_app = FastAPI()
+
+    request = Request({
+        "type": "http",
+        "app": request_app,
+    })
+
+    expected = dependencies.get_trace_store()
+    actual = dependencies.get_trace_store(request=request)
+
+    assert actual is expected

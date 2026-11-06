@@ -83,3 +83,27 @@ def test_get_settings_reuses_same_instance():
         assert first_settings is second_settings
     finally:
         config.get_settings.cache_clear()
+
+
+def test_settings_database_url_defaults_to_none(monkeypatch):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+
+    from app.config import Settings
+
+    settings = Settings(_env_file=None)
+
+    assert settings.database_url is None
+
+
+def test_settings_reads_database_url_from_environment(monkeypatch):
+    database_url = (
+        "postgresql://agent:test-password@db:5432/test_db"
+    )
+
+    monkeypatch.setenv("DATABASE_URL", database_url)
+
+    from app.config import Settings
+
+    settings = Settings(_env_file=None)
+
+    assert settings.database_url == database_url
