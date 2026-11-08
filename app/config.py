@@ -12,6 +12,8 @@ DEFAULT_EMBEDDING_QUERY_INSTRUCTION = (
 
 
 class Settings(BaseSettings):
+    readiness_timeout_seconds: float = Field(default=1.0, gt=0, le=10, allow_inf_nan=False)
+
     web_search_cache_coalesce_enabled: bool = True
     web_search_cache_max_inflight: int = Field(default=64, gt=0, le=1024)
     web_search_cache_max_waiters: int = Field(default=32, gt=0, le=256)

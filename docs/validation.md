@@ -1,31 +1,33 @@
 # 验证层次与发布边界
 
-## 已完成的本地验证
+2026-11-08，V4 首版发布副本的实际验证：
 
-2026-11-06，Windows、Python3.11.7：
-
-| 层次 | 结果 | 能说明什么 |
+| 层次 | 结果 | 范围 |
 |---|---|---|
-| 默认测试 | 691 passed / 5 skipped / 31 deselected | 单元与受控HTTP/ASGI路径；不需真实模型/数据库 |
-| 真实专用测试库 | 25 passed / 6 skipped | PostgreSQL/pgvector持久化与HTTP集成；模型可为受控替身 |
-| 真实外部服务 | RAG闭环/重启、Agent/Search与缓存样本已单独运行 | 对应样本的实际执行；不是全量质量/生产负载验收 |
+| Windows/Python3.11.7 默认 | 755 passed, 5 skipped, 58 deselected, 1 warning in 28.42s | 单元与受控ASGI/HTTP，不是外部模型验证 |
+| 专用真实测试数据库 | 52 passed, 6 skipped, 760 deselected, 1 warning in 12.19s | PostgreSQL/pgvector、事务、快照、故障恢复；模型可为替身 |
+| 最新Docker/Linux镜像 | 本地真实通过 | 合成1页PDF、宿主机Ollama1024维、Trace7Span、重建持久化、PG停启恢复 |
+| GitHub CI | Linux/Windows Python3.11 | 实际状态见仓库Actions；不执行收费模型/数据库测试 |
 
-既有Starlette/httpx弃用warning仍存在。skip/deselected不算通过。GitHub Actions另在Linux/Windows Python3.11运行默认测试，实际状态看仓库CI。
+skip/deselected不算通过。既有TestClient弃用warning保留，没有为消除warning改变HTTP库契约。公开源码与本地开发代码逐文件核对Python AST，导出只规范化换行/EOF；真实部署所用镜像文件又与该发布源码逐字节核对。
 
-## 可验证行为
+## 当前镜像实测
 
-- PDF物理页码、规范化字符映射、Chunk来源；不跨页粗暴拼接。
-- 原子导入、重复ID拒绝覆盖、持久化后独立连接/进程读取、profile不一致拒绝。
-- 输入与预算边界、工具失败/超时/取消、只读显式错误有限重试、最终修复不重执行工具。
-- 引用属于本次可见证据；被执行器拒绝的结果不授权引用。
-- TTL/LRU/序列化预算、凭据及参数隔离、缓存异常回退、原来源时间保留。
-- 并发owner/waiter、取消/失败通知、clear代际隔离、容量旁路。
-- 评估来源变化/失败参数/观察不完整不能误标可配对。
+- 镜像ID `sha256:f53791d6befd6a5b9fe463d52bdb103cecfcee823158dee3565809db13efa0b4`，Python 3.11.18，UID10001、33项运行锁版本匹配、无pytest或运行密钥打包。
+- 独立随机Compose project，API只绑定本机；init-db首次/重复执行符合约定。
+- 真实Ollama导入合成1页/1Chunk，1024维；新批量Trace保存和快照读取在真实API链路执行。
+- 停止本测试PG时ready503/health200，恢复PG后原app无需重启即ready200。
+- app/PG两容器重建后旧Trace内容一致、PDFhash与索引匹配；再次真实Embedding检索命中原页。
+- app/PG正常退出码均0，测试容器与网络移除、临时端口关闭，新测试卷保留；旧开发容器/数据未迁移。
 
-## 没有被宣称完成
+本轮DeepSeek调用为0；早期RAG问答、Agent/Search和缓存真实样本仍按历史范围记录，不冒充本轮新外部生成验证。
 
-所有答案语义正确、任意PDF布局/OCR/图表理解、Redis共享缓存、跨进程合并、语义缓存、网页Fetch、生产部署/压测、独立质量盲评。
+## 研究与性能
 
-默认关闭的回答聚焦实验没有证明稳定质量收益。最终开关与资源契约已用受控测试验证；不能把此前候选always-on外呼当成最终开关的真实集成验收。
+Search冷/热和Agent样本见[实验](evaluation.md)，Trace写入ABBA3200次全通过及控制组结果也在该文档。它们不是生产容量、端到端通用加速或问答准确率。
 
-公开版不携带真实密钥、论文全文、数据库卷和原始本地会话。求职展示中的性能数字限于[已注明范围的小样本](evaluation.md)，不写成通用提升百分比。
+## 尚未宣称完成
+
+任意PDF布局/OCR/图表理解、所有答案语义正确、独立质量盲评、Redis共享/跨进程合并/语义缓存、网页Fetch、公网认证/TLS、高可用/自动备份、生产压测。回答聚焦实验默认关闭，真实结果未证明稳定质量收益。
+
+V4首版范围是可复现本地部署、基础故障恢复、并发一致性与有证据的Store优化，后续需求不追溯增加为该首版的完成门槛。

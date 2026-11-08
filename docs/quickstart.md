@@ -121,3 +121,10 @@ python scripts/evaluate_agent.py --live --repeat 1 --output artifacts/agent-eval
 ```
 
 输出含manifest、JSONL、Trace、失败和待审信息，保留在本地`artifacts/`。具体参数可用各脚本`--help`核对。
+
+
+## V4 本地容器方式
+
+见[Docker Compose部署](deployment.md)。它创建独立demo库/文件卷，不引用原55432/55433开发卷，显式初始化后启动。最新读快照/批量写代码需重新build镜像，原论文与真实密钥不随仓库发布。
+
+部分真实数据库测试会新建自己的随机测试库并清理，需要CREATEDB；所有管理连接都应是专用测试库。Trace性能入口和范围见[实验](evaluation.md#trace-批量写入对照)。

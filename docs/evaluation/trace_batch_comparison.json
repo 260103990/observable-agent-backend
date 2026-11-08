@@ -1,0 +1,288 @@
+{
+  "measured_operations": 3200,
+  "failed": 0,
+  "all_four_databases_dropped": true,
+  "paired_workload_and_driver_match": true,
+  "server_version": "17.11 (Debian 17.11-1.pgdg13+2)",
+  "rows": [
+    {
+      "operation": "read",
+      "pool": 1,
+      "concurrency": 1,
+      "baseline": {
+        "samples": 200,
+        "qps": 195.283,
+        "p50_ms": 5.06,
+        "p95_ms": 5.634,
+        "acquire_p50_ms": 0.021,
+        "hold_p50_ms": 3.871
+      },
+      "candidate": {
+        "samples": 200,
+        "qps": 179.707,
+        "p50_ms": 5.478,
+        "p95_ms": 6.283,
+        "acquire_p50_ms": 0.021,
+        "hold_p50_ms": 4.185
+      },
+      "p50_reduction_percent": -8.26,
+      "paired_p50_reductions_percent": [
+        -10.26,
+        -5.72
+      ]
+    },
+    {
+      "operation": "read",
+      "pool": 1,
+      "concurrency": 8,
+      "baseline": {
+        "samples": 200,
+        "qps": 218.883,
+        "p50_ms": 36.487,
+        "p95_ms": 40.714,
+        "acquire_p50_ms": 31.686,
+        "hold_p50_ms": 3.701
+      },
+      "candidate": {
+        "samples": 200,
+        "qps": 214.993,
+        "p50_ms": 36.543,
+        "p95_ms": 43.214,
+        "acquire_p50_ms": 31.807,
+        "hold_p50_ms": 3.603
+      },
+      "p50_reduction_percent": -0.15,
+      "paired_p50_reductions_percent": [
+        -2.5,
+        0.4
+      ]
+    },
+    {
+      "operation": "read",
+      "pool": 4,
+      "concurrency": 8,
+      "baseline": {
+        "samples": 200,
+        "qps": 622.615,
+        "p50_ms": 12.482,
+        "p95_ms": 16.906,
+        "acquire_p50_ms": 5.698,
+        "hold_p50_ms": 4.767
+      },
+      "candidate": {
+        "samples": 200,
+        "qps": 630.898,
+        "p50_ms": 12.301,
+        "p95_ms": 17.704,
+        "acquire_p50_ms": 5.521,
+        "hold_p50_ms": 4.71
+      },
+      "p50_reduction_percent": 1.45,
+      "paired_p50_reductions_percent": [
+        2.84,
+        0.6
+      ]
+    },
+    {
+      "operation": "read",
+      "pool": 4,
+      "concurrency": 16,
+      "baseline": {
+        "samples": 200,
+        "qps": 647.627,
+        "p50_ms": 24.47,
+        "p95_ms": 25.619,
+        "acquire_p50_ms": 17.766,
+        "hold_p50_ms": 4.657
+      },
+      "candidate": {
+        "samples": 200,
+        "qps": 655.311,
+        "p50_ms": 24.169,
+        "p95_ms": 26.74,
+        "acquire_p50_ms": 17.485,
+        "hold_p50_ms": 4.588
+      },
+      "p50_reduction_percent": 1.23,
+      "paired_p50_reductions_percent": [
+        1.95,
+        0.32
+      ]
+    },
+    {
+      "operation": "write",
+      "pool": 1,
+      "concurrency": 1,
+      "baseline": {
+        "samples": 200,
+        "qps": 96.238,
+        "p50_ms": 10.323,
+        "p95_ms": 11.84,
+        "acquire_p50_ms": 0.023,
+        "hold_p50_ms": 9.095
+      },
+      "candidate": {
+        "samples": 200,
+        "qps": 142.977,
+        "p50_ms": 6.889,
+        "p95_ms": 8.156,
+        "acquire_p50_ms": 0.023,
+        "hold_p50_ms": 5.681
+      },
+      "p50_reduction_percent": 33.27,
+      "paired_p50_reductions_percent": [
+        34.45,
+        32.49
+      ]
+    },
+    {
+      "operation": "write",
+      "pool": 1,
+      "concurrency": 8,
+      "baseline": {
+        "samples": 200,
+        "qps": 100.807,
+        "p50_ms": 76.509,
+        "p95_ms": 96.793,
+        "acquire_p50_ms": 66.881,
+        "hold_p50_ms": 8.694
+      },
+      "candidate": {
+        "samples": 200,
+        "qps": 145.327,
+        "p50_ms": 54.09,
+        "p95_ms": 61.819,
+        "acquire_p50_ms": 47.159,
+        "hold_p50_ms": 5.666
+      },
+      "p50_reduction_percent": 29.3,
+      "paired_p50_reductions_percent": [
+        35.13,
+        25.91
+      ]
+    },
+    {
+      "operation": "write",
+      "pool": 4,
+      "concurrency": 8,
+      "baseline": {
+        "samples": 200,
+        "qps": 314.893,
+        "p50_ms": 24.212,
+        "p95_ms": 29.796,
+        "acquire_p50_ms": 11.666,
+        "hold_p50_ms": 10.742
+      },
+      "candidate": {
+        "samples": 200,
+        "qps": 464.074,
+        "p50_ms": 15.628,
+        "p95_ms": 27.469,
+        "acquire_p50_ms": 7.485,
+        "hold_p50_ms": 6.548
+      },
+      "p50_reduction_percent": 35.45,
+      "paired_p50_reductions_percent": [
+        31.77,
+        41.21
+      ]
+    },
+    {
+      "operation": "write",
+      "pool": 4,
+      "concurrency": 16,
+      "baseline": {
+        "samples": 200,
+        "qps": 328.963,
+        "p50_ms": 46.175,
+        "p95_ms": 51.456,
+        "acquire_p50_ms": 34.319,
+        "hold_p50_ms": 10.355
+      },
+      "candidate": {
+        "samples": 200,
+        "qps": 460.573,
+        "p50_ms": 31.406,
+        "p95_ms": 42.353,
+        "acquire_p50_ms": 23.224,
+        "hold_p50_ms": 6.594
+      },
+      "p50_reduction_percent": 31.98,
+      "paired_p50_reductions_percent": [
+        34.7,
+        30.17
+      ]
+    }
+  ],
+  "date": "2026-11-08",
+  "parameters": {
+    "operations_per_phase": 100,
+    "repeats_per_run": 1,
+    "spans": 4,
+    "schedule": [
+      [
+        "baseline",
+        20261108
+      ],
+      [
+        "candidate",
+        20261108
+      ],
+      [
+        "candidate",
+        20261109
+      ],
+      [
+        "baseline",
+        20261109
+      ]
+    ],
+    "modes": [
+      "read",
+      "write"
+    ],
+    "pool_concurrency": [
+      [
+        1,
+        1
+      ],
+      [
+        1,
+        8
+      ],
+      [
+        4,
+        8
+      ],
+      [
+        4,
+        16
+      ]
+    ],
+    "scope": "local_closed_loop_TraceStore_not_HTTP_or_Agent"
+  },
+  "python": "3.11.7",
+  "platform": "Windows",
+  "asyncpg": "0.32.0",
+  "source_sha256": {
+    "baseline": {
+      "app/observability/store.py": "bd33458f598db5c9b1985f741470468b59555a850b1ced45edfbcd049153bf14",
+      "app/evaluation/trace_load.py": "2b17a05dbeb305c69813786a1d7263d32df1ac9e14a8e21aff9663fa3787c89a",
+      "scripts/benchmark_trace_store.py": "776a2399f153ac66e29f77dc92f73c278717321303c3a12ddee67e2d7c5527b3"
+    },
+    "candidate": {
+      "app/observability/store.py": "792bb04a37b7dc82e5a727877ab679aab57b1d89ec6e28c0123ebfaa69196715",
+      "app/evaluation/trace_load.py": "2b17a05dbeb305c69813786a1d7263d32df1ac9e14a8e21aff9663fa3787c89a",
+      "scripts/benchmark_trace_store.py": "776a2399f153ac66e29f77dc92f73c278717321303c3a12ddee67e2d7c5527b3"
+    }
+  },
+  "schema_sha256": "a3f44398b9fda6de22764506ce86f7aff0027218b3345c3401260b5afc34549a",
+  "patch_sha256": "6e31378129fb0646cb2d07f39ea624560ec720d5bd12600136fbe37be3a5d041",
+  "aggregation": "200 samples per version/case; linear pooled percentiles; QPS=sum successes/sum phase wall",
+  "limitations": [
+    "Two runs per version; no statistical-significance or long-run capacity claim.",
+    "Read controls mixed, including 8.26% higher p50 at pool1/concurrency1.",
+    "Only save differs; fresh private databases, initialization/warmup/cleanup excluded.",
+    "Host background activity not system-isolated; no tests/downloads/models initiated concurrently by this session."
+  ]
+}

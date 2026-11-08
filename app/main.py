@@ -50,14 +50,21 @@ if not request_logger.handlers:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    app.state.startup_complete = False
     settings = get_settings()
     cache = cache_from_settings(settings) if settings.web_search_cache_enabled else None
     if cache is not None:
         app.state.search_cache = cache
     try:
         async with _database_lifespan(app):
-            yield
+            app.state.startup_complete = True
+            try:
+                yield
+            finally:
+                # Become unready before database/HTTP resource cleanup begins.
+                app.state.startup_complete = False
     finally:
+        app.state.startup_complete = False
         if cache is not None:
             cache.clear()
             del app.state.search_cache

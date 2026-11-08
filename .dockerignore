@@ -1,0 +1,12 @@
+# Deny by default: no local .env, PDF, Git history, data, tests or learning logs.
+**
+!Dockerfile
+!requirements.container.lock
+!app/
+!app/**/
+!app/**/*.py
+!app/**/*.sql
+!scripts/
+!scripts/init_demo_database.py
+**/__pycache__/
+**/*.py[cod]
