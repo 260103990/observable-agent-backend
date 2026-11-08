@@ -17,3 +17,6 @@ artifacts/
 *.pdf
 *.sqlite*
 *.db
+
+
+!.env.demo.example

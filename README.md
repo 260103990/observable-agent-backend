@@ -4,7 +4,7 @@
 
 一个以论文阅读为应用场景、以外部搜索缓存为实验方向的 **Python Agent 后端**。实现论文 RAG、受控多轮 Tool Calling、Web Search、Trace/Span，以及可复现的精确搜索缓存实验。
 
-关注的不只是模型回答，还包括数据如何持久化、工具如何受控执行、请求在哪里耗时，以及缓存究竟省掉了什么。当前是可运行的工程与研究实验基线；回答质量和生产部署仍有明确边界。
+关注的不只是模型回答，还包括数据如何持久化、工具如何受控执行、请求在哪里耗时，以及缓存究竟省掉了什么。V1～V4 首版已形成可运行的业务、实验和本地部署闭环；回答质量与生产部署仍有明确边界。
 
 ## 已实现
 
@@ -15,6 +15,7 @@
 | 工具 | `add_numbers`、`paper_retrieval`、可选 `web_search`；保留原单步 Agent API |
 | 可观测性 | 请求 ID、阶段 Span、失败状态、模型/工具/Search 延迟、尝试次数、响应体字节、Cache Hit/Miss |
 | Search 缓存 | 精确键、非滑动 TTL、LRU、容量预算、同 key 并发合并、取消传播、当前 Trace 与原来源关联 |
+| 可靠性与部署 | 存活/就绪分离、数据库失败恢复、Trace一致快照/批量写、非root Docker Compose与持久化卷 |
 | 评估 | 无缓存/冷缓存/独立预热/热缓存，工具层与完整 Agent 分层，保留失败和质量待审状态 |
 
 向量检索保持默认；可选 PostgreSQL 全文+向量 RRF 混合检索。回答聚焦提示实验默认关闭：真实结果未证明稳定收益，没有把实验写成已解决的质量问题。
@@ -55,13 +56,16 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 
 打开 [Swagger UI](http://127.0.0.1:8000/docs)，或请求 `GET /health`。默认可以启动基础服务；模型接口需要另行配置对应服务，RAG/Web Search/缓存均默认关闭。
 
+容器方式见 [Docker Compose 部署](docs/deployment.md)，使用全新独立 demo 库与卷；[可靠性设计](docs/reliability.md)说明就绪、事务和恢复边界。
+
 完整的 [快速启动](docs/quickstart.md) 包含本地模型、全新 pgvector 演示库初始化、论文上传/问答、Agent 请求及实验运行。
 
 ## HTTP 接口
 
 | 接口 | 用途 |
 |---|---|
-| `GET /health` | 服务健康检查 |
+| `GET /health` | HTTP 进程存活检查 |
+| `GET /ready` | 本地初始化、已配置数据库可借用性、启用RAG的初始化状态 |
 | `POST /chat` | Ollama 文本生成 |
 | `POST /agent/run` | 保留的 Ollama 单步工具调用 |
 | `POST /agent/loop` | DeepSeek 受控多轮工具调用；可指定论文并显式请求 Web Search |
@@ -73,7 +77,7 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 
 ## 可以核对的验证结果
 
-最近一次本地默认验证为 **691 passed、5 skipped、31 deselected**；真实测试数据库验证为 **25 passed、6 skipped**。默认测试包含单元与受控 ASGI 集成；数据库测试中的模型仍可为受控替身，真实外部服务结果另行记录。CI 在 Linux/Windows 上独立运行默认测试。
+最近一次本地默认验证为 **755 passed、5 skipped、58 deselected**；真实测试数据库验证为 **52 passed、6 skipped**。默认测试包含单元与受控 ASGI 集成；数据库测试中的模型仍可为受控替身，真实外部服务结果另行记录。CI 在 Linux/Windows 上独立运行默认测试。
 
 真实小样本缓存实验（2026-11-05）：
 
@@ -83,6 +87,8 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 | 同 key 冷请求并发 | 4 并发×2轮：关闭合并 8 个 Search 请求；开启合并 2 个 | 6 次等待复用，TTL hits 均为 0；单进程、小样本 |
 
 这些数据证明特定工作负载中确实减少了 Search 请求，不能直接写成稳定端到端加速或更高回答准确率。完整 Agent 的部分来源摘要在阶段间变化，因此未宣称严格可配对的因果加速。
+
+TraceStore 写入另做旧→新→新→旧的本机对照：3200 次读写全成功；固定 4-Span 负载写 p50 低约 29.30%～35.45%。这不是 Agent/生产性能提升，读控制组也有退化，完整数据见 [Trace 对照](docs/evaluation.md#trace-批量写入对照)。
 
 查看 [实验协议、原始指标摘录与复现入口](docs/evaluation.md) 和 [验证层次与已知限制](docs/validation.md)。
 
@@ -94,7 +100,7 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 - Search 默认使用提供方摘要，**没有抓取网页正文**；缓存命中保留原获取时间，TTL 不保证事实仍新鲜。
 - 缓存与并发合并仅在单进程内共享；尚未实现 Redis、跨进程合并或语义缓存。
 - 复杂 PDF 布局/图表可能影响召回，引用校验不等于语义蕴含；真实实验仍出现漏项、范围错误、资料不足和执行预算终止。
-- 应用容器化、生产部署、独立质量盲评和大规模负载测试属于后续工作。
+- 本地应用容器化、启停/重建与数据保留已验证；公网认证/TLS、高可用、自动备份、独立质量盲评和生产负载仍属后续范围。
 
 ## 从哪里读代码
 

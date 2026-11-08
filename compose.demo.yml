@@ -1,0 +1,70 @@
+name: observable-agent-demo
+
+services:
+  postgres:
+    image: pgvector/pgvector:0.8.7-pg17-trixie@sha256:01215e09bd4bd582d20230e025b6c971deeeffee49ceef1aae167e839cb62a7e
+    environment:
+      POSTGRES_USER: agent
+      POSTGRES_PASSWORD: ${DEMO_DB_PASSWORD:?Set DEMO_DB_PASSWORD in .env.demo}
+      POSTGRES_DB: observable_agent_demo
+    volumes:
+      - demo_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agent -d observable_agent_demo"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  init-db:
+    image: observable-agent-backend:demo
+    build: .
+    profiles: ["setup"]
+    command: ["python", "scripts/init_demo_database.py", "--confirm-demo"]
+    environment:
+      DATABASE_URL: postgresql://agent:${DEMO_DB_PASSWORD:?Set DEMO_DB_PASSWORD in .env.demo}@postgres:5432/observable_agent_demo
+    depends_on:
+      postgres:
+        condition: service_healthy
+    read_only: true
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+
+  app:
+    image: observable-agent-backend:demo
+    build: .
+    ports:
+      - "127.0.0.1:${DEMO_API_PORT:-18080}:8000"
+    environment:
+      DATABASE_URL: postgresql://agent:${DEMO_DB_PASSWORD:?Set DEMO_DB_PASSWORD in .env.demo}@postgres:5432/observable_agent_demo
+      RAG_ENABLED: "true"
+      RAG_STORAGE_DIR: /app/data/papers
+      OLLAMA_EMBED_URL: ${DEMO_OLLAMA_BASE_URL:-http://host.docker.internal:11434}/api/embed
+      OLLAMA_CHAT_URL: ${DEMO_OLLAMA_BASE_URL:-http://host.docker.internal:11434}/api/chat
+      OLLAMA_GENERATE_URL: ${DEMO_OLLAMA_BASE_URL:-http://host.docker.internal:11434}/api/generate
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-flash}
+      WEB_SEARCH_ENABLED: ${WEB_SEARCH_ENABLED:-false}
+      WEB_SEARCH_CACHE_ENABLED: ${WEB_SEARCH_CACHE_ENABLED:-false}
+    volumes:
+      - demo_papers:/app/data/papers
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=3).close()"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    read_only: true
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    stop_grace_period: 300s
+    restart: unless-stopped
+
+volumes:
+  demo_pgdata:
+  demo_papers:

@@ -1,0 +1,41 @@
+--- a/app/observability/store.py
++++ b/app/observability/store.py
+@@ -74,7 +74,12 @@
+                     trace.trace_id,
+                 )
+ 
+-                for span_index, span in enumerate(trace.spans):
++                span_rows = [
++                    (span_index, span.span_id, span.parent_span_id, span.name,
++                     span.status, span.duration_ms, json.dumps(span.attributes), span.error_type)
++                    for span_index, span in enumerate(trace.spans)
++                ]
++                if span_rows:
+                     await connection.execute(
+                         """
+                         INSERT INTO spans (
+@@ -88,17 +93,15 @@
+                             attributes,
+                             error_type
+                         )
+-                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
++                        SELECT $1, batch.*
++                        FROM unnest(
++                            $2::integer[], $3::text[], $4::text[], $5::text[],
++                            $6::text[], $7::double precision[], $8::jsonb[], $9::text[]
++                        ) AS batch(span_index, span_id, parent_span_id, name,
++                                   status, duration_ms, attributes, error_type)
+                         """,
+                         trace.trace_id,
+-                        span_index,
+-                        span.span_id,
+-                        span.parent_span_id,
+-                        span.name,
+-                        span.status,
+-                        span.duration_ms,
+-                        json.dumps(span.attributes),
+-                        span.error_type,
++                        *zip(*span_rows),
+                     )
+ 
+     async def get(
